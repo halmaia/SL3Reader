@@ -20,7 +20,7 @@ namespace LowranceReader2
         /// </remarks>
         SLG = 1,
         /// <summary>
-        /// Sonar log format for primary, secondary &amp; StructureScan® (sidescan &amp DownScan™) readings.
+        /// Sonar log format for primary, secondary &amp; StructureScan® (sidescan &amp; DownScan™) readings.
         /// 3D is not supported.
         /// The extension is “*.SL2”. Little Endian.
         /// </summary>
