@@ -1,41 +1,63 @@
-// Written by Ákos Halmai ® 2018.
+// Written by Ákos Halmai 2020.
+// See LICENCE file for lic. terms.
 // Univerity of Pécs, Faculty of Siences, Institute of Geography & Earthsciences
 // http://foldrajz.ttk.pte.hu./
+
 namespace LowranceReader2
 {
-    /// <summary>
-    /// File format enum for SLG, SL2 &amp; SL3 files.
-    /// This is the first <see cref="short"/> field in sonar log files.
-    /// </summary> 
-    public enum LogFileFormats : short
+       public enum LogFileFormats : short
     {
-        /// <summary>
-        /// Standard sonar log format for Lowrance® &amp; Simrad® (Navico Inc.) devices.
-        /// It supports only primary &amp; secondary sonar readings. Sidescan &amp; 3D is not supported.
-        /// The extension is “*.SLG”. Little Endian.
-        /// </summary>
-        /// <remarks>Check in “HDS Gen3 Operator Manual - Lowrance”
-        /// https://ww2.lowrance.com/Root/Lowrance-Documents/HDSGen3/HDS-GEN3_OM_EN_988-10740-005_w.pdf
-        /// (09/05/2013)
-        /// </remarks>
         SLG = 1,
-        /// <summary>
-        /// Sonar log format for primary, secondary &amp; StructureScan® (sidescan &amp; DownScan™) readings.
-        /// 3D is not supported.
-        /// The extension is “*.SL2”. Little Endian.
-        /// </summary>
-        ///  <remarks>Check in “HDS Gen3 Operator Manual - Lowrance”
-        /// https://ww2.lowrance.com/Root/Lowrance-Documents/HDSGen3/HDS-GEN3_OM_EN_988-10740-005_w.pdf
-        /// (09/05/2013)
-        /// </remarks>
-        SL2, // No need to define value: auto-incremented by C♯™ 7.3. (SL2 = 2)
-        /// Sonar log format for primary, secondary &amp; StructureScan® 3D readings.
-        /// The extension is “*.SL3”. Little Endian.
-        /// </summary>
-        ///  <remarks>Check in “HDS Gen3 Operator Manual - Lowrance”
-        /// https://ww2.lowrance.com/Root/Lowrance-Documents/HDSGen3/HDS-GEN3_OM_EN_988-10740-005_w.pdf
-        /// (09/05/2013)
-        /// </remarks>
-        SL3 // No need to define value: auto-incremented by C♯™ 7.3. (SL3 = 3)
+        SL2, // Auto-increment
+        SL3
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    [DebuggerDisplay("{ToString()}")]
+    public readonly struct SLFileHeader
+    {
+        public const int Size = 8;
+
+        private const LogFileFormats DesiredFormat = LogFileFormats.SL3;
+        private const short DesiredBlockSize = 3200;
+
+        [DefaultValue(DesiredFormat)] public LogFileFormats FileFormat { get; }
+        public short DeviceID { get; }
+        [DefaultValue(DesiredBlockSize)] public short BlockSize { get; }
+        public short Unknown { get; }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override string ToString() => FileFormat.ToString() + " (" + BlockSize.ToString() + ")";
+
+        [SecuritySafeCritical()]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe SLFileHeader(byte[] buffer)
+        {
+            #region "Constants"
+            const string NameOfBuffer = nameof(buffer);
+            const string BufferIsNull = "The ‘" + NameOfBuffer + "’ argument can not be null.";
+            const string WrongBufferSize = "The length of the ‘" + NameOfBuffer + "’ argument must be equal to or longer than 8.";
+            #endregion "Constants"
+
+            #region "Argument checks"
+            if (buffer == null)
+                throw new ArgumentNullException(NameOfBuffer, BufferIsNull);
+
+            if (buffer.Length < Size)
+                throw new ArgumentOutOfRangeException(NameOfBuffer, WrongBufferSize);
+            #endregion "Argument checks" 
+
+            #region "Unsafe cast of incoming buffer."
+            fixed (byte* p = &buffer[0])
+                this = *(SLFileHeader*)p;
+            #endregion "Unsafe cast of incoming buffer."
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsValidFormat(
+            LogFileFormats desirdFormat = DesiredFormat,
+            short desiredBlockSize = DesiredBlockSize)
+            =>
+            FileFormat == desirdFormat && BlockSize == desiredBlockSize;
     }
 }
