@@ -1,5 +1,6 @@
 // Written by Ákos Halmai 2020.
 // See LICENCE file for lic. terms.
+// See https://doi.org/10.3390/ijgi9030149 for references.
 // Univerity of Pécs, Faculty of Siences, Institute of Geography & Earthsciences
 // http://foldrajz.ttk.pte.hu./
 
