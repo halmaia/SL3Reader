@@ -4,6 +4,15 @@
 // Univerity of Pécs, Faculty of Siences, Institute of Geography & Earthsciences
 // http://foldrajz.ttk.pte.hu./
 
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Diagnostics.Contracts;
+using System.IO;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Security;
+
 namespace LowranceReader2
 {
     #region Enums
@@ -66,6 +75,35 @@ namespace LowranceReader2
         }
     }
     #endregion Argument checks
+
+    #region File reader
+    public static class SonarLogFileReader
+    {
+        public static List<SL3Frame> ReadSL3SonarLogFile(string path, out SonarLogFileHeader header)
+        {
+            FileStream file = File.OpenRead(path);
+            byte[] buffer = new byte[SL3Frame.Size];
+            file.Read(buffer, 0, SonarLogFileHeader.Size);
+            header = new SonarLogFileHeader(buffer);
+
+            int position = SonarLogFileHeader.Size;
+            long length = file.Length;
+            List<SL3Frame> frames = new List<SL3Frame>((int)(length / 2000L));
+
+            while (SL3Frame.Size + position < length)
+            {
+                file.Read(buffer, 0, SL3Frame.Size);
+                SL3Frame frame = new SL3Frame(in buffer, 0, false);
+                position += frame.TotalLength;
+                file.Seek(position, SeekOrigin.Begin);
+                frames.Add(frame);
+            }
+
+            file.Close();
+            return frames;
+        }
+    }
+    #endregion File reader
 
     #region Structs
     [StructLayout(LayoutKind.Sequential, Size = Size)]
@@ -152,7 +190,7 @@ namespace LowranceReader2
         [field: FieldOffset(32)] public int Unknown4 { get; } // 32 --> 35
         [field: FieldOffset(36)] public int Unknown5 { get; } // 36 --> 39
         [field: FieldOffset(40)] public uint HardwareTime { get; } // 40 --> 43
-        [field: FieldOffset(44)] public uint OriginalLengthOfEchoData { get; } // 44 --> 47
+        [field: FieldOffset(44)] public int OriginalLengthOfEchoData { get; } // 44 --> 47
         [field: FieldOffset(48)] public float WaterDepth { get; } // 48 --> 51
         [field: FieldOffset(52)] public Frequency Frequency { get; } // 52 --> 53
         [field: FieldOffset(54)] public int Unknown6 { get; } // 54 --> 57
