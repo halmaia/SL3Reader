@@ -40,7 +40,7 @@ namespace LowranceReader2
     #endregion Enums
 
     #region Argument checks
-    internal static class ArgumentChecks
+    internal static class ArgumentTools
     {
         [ContractArgumentValidator]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -79,25 +79,37 @@ namespace LowranceReader2
     #region File reader
     public static class SonarLogFileReader
     {
-        public static List<SL3Frame> ReadSL3SonarLogFile(string path, out SonarLogFileHeader header)
+        public static List<SL3Frame> ReadFile(string path, out SonarLogFileHeader header)
         {
             FileStream file = File.OpenRead(path);
-            byte[] buffer = new byte[SL3Frame.Size];
-            file.Read(buffer, 0, SonarLogFileHeader.Size);
-            header = new SonarLogFileHeader(buffer);
 
-            int position = SonarLogFileHeader.Size;
             long length = file.Length;
+            if (length < SL3Frame.Size + SonarLogFileHeader.Size)
+                throw new IOException("The given file is too small. At least the header" +
+                    "and one frame is needed.");
+
+
+            byte[] buffer = new byte[SL3Frame.Size];
+            if (file.Read(buffer, 0, SonarLogFileHeader.Size) != SonarLogFileHeader.Size)
+                throw new IOException("Failed to read the file header.");
+
+            header = new SonarLogFileHeader(buffer);
+            if (!header.IsValidFormat())
+                throw new ArgumentException("The given file is not the type of SL3/3200.");
+
             List<SL3Frame> frames = new List<SL3Frame>((int)(length / 2000L));
 
-            while (SL3Frame.Size + position < length)
+            long offset = SonarLogFileHeader.Size;
+            do
             {
-                file.Read(buffer, 0, SL3Frame.Size);
+                if (file.Read(buffer, 0, SL3Frame.Size) != SL3Frame.Size)
+                    throw new IOException("Failed to read the frame at " + offset.ToString() + '.');
+
                 SL3Frame frame = new SL3Frame(in buffer, 0, false);
-                position += frame.TotalLength;
-                file.Seek(position, SeekOrigin.Begin);
                 frames.Add(frame);
-            }
+                offset += frame.TotalLength;
+                file.Seek(offset, SeekOrigin.Begin);
+            } while (file.Seek(offset, SeekOrigin.Begin)<length);
 
             file.Close();
             return frames;
@@ -128,7 +140,7 @@ namespace LowranceReader2
         public unsafe SonarLogFileHeader(byte[] buffer, int offset = 0)
         {
             #region "Argument checks"
-            ArgumentChecks.CheckArguments(buffer, offset, Size);
+            ArgumentTools.CheckArguments(buffer, offset, Size);
             #endregion "Argument checks"
 
             #region "Unsafe cast of incoming buffer."
@@ -230,12 +242,14 @@ namespace LowranceReader2
         {
             #region "Argument checks"
             if (strictParameterCheck)
-                ArgumentChecks.CheckArguments(buffer, offset, Size);
+                ArgumentTools.CheckArguments(buffer, offset, Size);
             #endregion "Argument checks"
 
             fixed (byte* p = &buffer[offset])
                 this = *(SL3Frame*)p;
         }
+
+        public override string ToString() => SurveyType.ToString();
     }
     #endregion Structs
 }
