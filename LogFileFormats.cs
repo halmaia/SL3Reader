@@ -15,7 +15,7 @@ using System.Security;
 
 namespace LowranceReader2
 {
-    #region Enums
+        #region Enums
     public enum SonarLogFileFormat : ushort
     {
         SLG = 1,
@@ -81,21 +81,29 @@ namespace LowranceReader2
     {
         public static List<SL3Frame> ReadFile(string path, out SonarLogFileHeader header)
         {
-            FileStream file = File.OpenRead(path);
+            #region Argument, file & header checks
+            if (string.IsNullOrWhiteSpace(path))
+                throw new ArgumentNullException(nameof(path), "No valid path was provided.");
 
-            long length = file.Length;
+            FileInfo fileInfo = new FileInfo(path);
+            if (!fileInfo.Exists)
+                throw new FileNotFoundException("File not found.", path);
+
+            long length = fileInfo.Length;
             if (length < SL3Frame.Size + SonarLogFileHeader.Size)
                 throw new IOException("The given file is too small. At least the header" +
                     "and one frame is needed.");
 
-
             byte[] buffer = new byte[SL3Frame.Size];
+
+            FileStream file = fileInfo.OpenRead();
             if (file.Read(buffer, 0, SonarLogFileHeader.Size) != SonarLogFileHeader.Size)
                 throw new IOException("Failed to read the file header.");
 
             header = new SonarLogFileHeader(buffer);
             if (!header.IsValidFormat())
                 throw new ArgumentException("The given file is not the type of SL3/3200.");
+            #endregion Argument, file & header checks
 
             List<SL3Frame> frames = new List<SL3Frame>((int)(length / 2000L));
 
@@ -109,7 +117,7 @@ namespace LowranceReader2
                 frames.Add(frame);
                 offset += frame.TotalLength;
                 file.Seek(offset, SeekOrigin.Begin);
-            } while (file.Seek(offset, SeekOrigin.Begin)<length);
+            } while (file.Seek(offset, SeekOrigin.Begin) < length);
 
             file.Close();
             return frames;
