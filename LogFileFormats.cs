@@ -116,7 +116,6 @@ namespace LowranceReader2
                 SL3Frame frame = new SL3Frame(in buffer, 0, false);
                 frames.Add(frame);
                 offset += frame.TotalLength;
-                file.Seek(offset, SeekOrigin.Begin);
             } while (file.Seek(offset, SeekOrigin.Begin) < length);
 
             file.Close();
