@@ -45,7 +45,7 @@ namespace SL3Reader
             private readonly SL3Reader source;
             private readonly Frame[] aCurrent;
             private unsafe readonly Frame* pCurrent;
-            private readonly long maxPos;
+            private readonly long fileLength;
 
             public unsafe Enumerator(SL3Reader source)
             {
@@ -56,7 +56,7 @@ namespace SL3Reader
                 aCurrent = GC.AllocateArray<Frame>(1, true);
                 pCurrent = (Frame*)Unsafe.AsPointer(ref aCurrent[0]);
                 this.source = source;
-                maxPos = source.Length - 1L;
+                fileLength = source.Length;
                 ((IEnumerator)this).Reset();
             }
 
@@ -73,7 +73,7 @@ namespace SL3Reader
                 SL3Reader src = source;
                 if (src.Read(new(pCurrent, Frame.Size)) != Frame.Size)
                     return false; // Unable to read. It could be due to EOF or IO error.
-                return src.Seek(pCurrent->TotalLength - Frame.Size, SeekOrigin.Current) < maxPos;
+                return src.Seek(pCurrent->TotalLength - Frame.Size, SeekOrigin.Current) < fileLength;
                 // Avoid returning non-complete frame.
             }
 
