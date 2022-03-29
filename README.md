@@ -1,2 +1,2 @@
-# SL3Reader2
+# SL3Reader
 It is a tiny C# app, which is able to read SL3 sonar log files made by Lowrance &amp; Simard devices and export the frame headers into a CSV text file. For details see &amp; cite the following publication: Halmai, Ákos, Alexandra Gradwohl–Valkay, Szabolcs Czigány, Johanna Ficsor, Zoltán Á. Liptay, Kinga Kiss, Dénes Lóczy, and Ervin Pirkhoffer. 2020. "Applicability of a Recreational-Grade Interferometric Sonar for the Bathymetric Survey and Monitoring of the Drava River" ISPRS International Journal of Geo-Information 9, no. 3: 149. https://doi.org/10.3390/ijgi9030149 https://www.mdpi.com/2220-9964/9/3/149
