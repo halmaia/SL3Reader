@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "SL3Reader": {
+      "commandName": "Project",
+      "commandLineArgs": "\"C:\\Users\\halmaia\\Desktop\\CardSave\\FEL.sl3\" \"F:\\op.csv\""
+    }
+  }
+}

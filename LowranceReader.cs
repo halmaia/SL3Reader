@@ -7,10 +7,10 @@ using System.Threading;
 
 namespace SL3Reader
 {
-    public class LowranceReader :
+    public class SL3Reader :
         FileStream, IEnumerable<Frame>, IEnumerable
     {
-        public unsafe LowranceReader(string path) :
+        public unsafe SL3Reader(string path) :
            base(path, FileMode.Open, FileAccess.Read,
            FileShare.Read, 4096, FileOptions.SequentialScan)
         {
@@ -41,17 +41,21 @@ namespace SL3Reader
 
         public readonly struct Enumerator : IEnumerator<Frame>, IEnumerator
         {
-            private readonly LowranceReader source;
+            private readonly SL3Reader source;
             private readonly Frame[] aCurrent;
             private unsafe readonly Frame* pCurrent;
+            private readonly long maxPos;
 
-            public unsafe Enumerator(LowranceReader source)
+            public unsafe Enumerator(SL3Reader source)
             {
                 bool lockTaken = false;
                 Monitor.Enter(source, ref lockTaken);
+                if (!lockTaken) throw new IOException("Unable to lock stream for single access use.");
+
                 aCurrent = GC.AllocateArray<Frame>(1, true);
                 pCurrent = (Frame*)Unsafe.AsPointer(ref aCurrent[0]);
                 this.source = source;
+                maxPos = source.Length - 1L;
                 ((IEnumerator)this).Reset();
             }
 
@@ -65,11 +69,11 @@ namespace SL3Reader
 
             unsafe bool IEnumerator.MoveNext()
             {
-                LowranceReader src = source;
+                SL3Reader src = source;
                 if (src.Read(new(pCurrent, Frame.Size)) != Frame.Size)
-                    return false;
-                _ = src.Seek(pCurrent->TotalLength - Frame.Size, SeekOrigin.Current);
-                return true;
+                    return false; // Unable to read. It could be due to EOF or IO error.
+                return src.Seek(pCurrent->TotalLength - Frame.Size, SeekOrigin.Current) < maxPos;
+                // Avoid returning non-complete frame.
             }
 
             void IEnumerator.Reset()
