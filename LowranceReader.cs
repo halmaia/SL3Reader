@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -19,7 +20,7 @@ namespace SL3Reader
             if (Read(new(fileHeader, SLFileHeader.Size)) != SLFileHeader.Size)
                 throw new EndOfStreamException("The file is too small!");
 
-            if (fileHeader->FileFormat != LogFileFormats.SL3 || fileHeader->BlockSize != 3200)
+            if (fileHeader->FileFormat != LogFileFormats.SL3) // Block size filter removed: '|| fileHeader->BlockSize != 3200'
                 throw new InvalidDataException("File type not supported!");
         }
 
