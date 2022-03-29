@@ -3,3 +3,5 @@ It is a tiny C# app, which is able to read SL3 sonar log files made by Lowrance 
 
 For Hungarian readers:
 Halmai Ákos, Balatonyi László, Valkay Alexandra Ilona, Czigány Szabolcs, Liptay Zoltán Árpád, Pirkhoffer Ervin. 2018. Új megközelítésű mederfelmérési technikák alkalmazása kisvízfolyásokon. Védelem Tudomány – III. évfolyam 4. szám, 2018. 12. hó. http://www.vedelemtudomany.hu/articles/III/4/09-halmai-etal.pdf
+
+Dissertation in Hungarian: https://pea.lib.pte.hu/handle/pea/24594
