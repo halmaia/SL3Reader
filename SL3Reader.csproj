@@ -6,7 +6,7 @@
     <AssemblyName>SL3Reader</AssemblyName>
     <RootNamespace>SL3Reader</RootNamespace>
     <ApplicationIcon />
-    <StartupObject />
+    <StartupObject>SL3Reader.Program</StartupObject>
     <AnalysisLevel>preview</AnalysisLevel>
   </PropertyGroup>
 

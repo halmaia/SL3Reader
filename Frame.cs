@@ -67,7 +67,7 @@ namespace SL3Reader
         [FieldOffset(108)] public readonly float GNSSAltitude; //(108)
         [FieldOffset(112)] public readonly float MagneticHeading; //(112)
 
-        [FieldOffset(116)] public readonly FrameFlags Flags; //(116)
+        [FieldOffset(116)] public readonly DataValidity Flags; //(116)
         [FieldOffset(118)] public readonly float UnknownAt118; //(118)
         [FieldOffset(122)] public readonly ushort UnknownAt122; //(122)
         [FieldOffset(124)] public readonly uint Milliseconds; //(124)
