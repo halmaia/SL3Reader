@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Globalization;
+using System.Runtime.InteropServices;
 
 namespace SL3Reader
 {
@@ -10,17 +11,17 @@ namespace SL3Reader
         public override string ToString() =>
             string.Join(',', new string[]
                 {SurveyType.ToString(),
-                WaterDepth.ToString(),
+                WaterDepth.ToString(CultureInfo.InvariantCulture),
                 X.ToString(),
                 Y.ToString(),
-                GNSSAltitude.ToString(),
-                GNSSHeading.ToString(),
-                GNSSSpeed.ToString(),
-                MagneticHeading.ToString(),
-                MinRange.ToString(),
-                MaxRange.ToString(),
-                WaterTemperature.ToString(),
-                WaterSpeed.ToString(),
+                GNSSAltitude.ToString(CultureInfo.InvariantCulture),
+                GNSSHeading.ToString(CultureInfo.InvariantCulture),
+                GNSSSpeed.ToString(CultureInfo.InvariantCulture),
+                MagneticHeading.ToString(CultureInfo.InvariantCulture),
+                MinRange.ToString(CultureInfo.InvariantCulture),
+                MaxRange.ToString(CultureInfo.InvariantCulture),
+                WaterTemperature.ToString(CultureInfo.InvariantCulture),
+                WaterSpeed.ToString(CultureInfo.InvariantCulture),
                 HardwareTime.ToString(),
                 Frequency.ToString(),
                 Milliseconds.ToString() + '\n'});
