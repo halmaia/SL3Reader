@@ -13,8 +13,8 @@ namespace SL3Reader
                 Console.WriteLine(@"Usage example: SL3Reader.exe C:\input.sl3 D:\output.csv");
                 return;
             }
-            using SL3Reader LR = new(input);
-            LR.ExportToCSV(output = Path.GetFullPath(args[1]));
+            using SL3Reader sl3reader = new(input);
+            sl3reader.ExportToCSV(output = Path.GetFullPath(args[1]));
         }
     }
 }

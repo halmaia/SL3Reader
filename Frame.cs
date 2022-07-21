@@ -1,32 +1,15 @@
-﻿using System.Globalization;
+﻿using System.Diagnostics;
+using static System.Globalization.CultureInfo;
 using System.Runtime.InteropServices;
 
 namespace SL3Reader
 {
     [StructLayout(LayoutKind.Explicit, Size = Size)]
+    [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
     internal readonly struct Frame
     {
-        internal const string CSVHeader = "SurveyType,WaterDepth,X,Y,GNSSAltitude,GNSSHeading,GNSSSpeed,MagneticHeading,MinRange,MaxRange,WaterTemperature,WaterSpeed,HardwareTime,Frequency,Milliseconds\n";
-
-        public override string ToString() =>
-            string.Join(',', new string[]
-                {SurveyType.ToString(),
-                WaterDepth.ToString(CultureInfo.InvariantCulture),
-                X.ToString(),
-                Y.ToString(),
-                GNSSAltitude.ToString(CultureInfo.InvariantCulture),
-                GNSSHeading.ToString(CultureInfo.InvariantCulture),
-                GNSSSpeed.ToString(CultureInfo.InvariantCulture),
-                MagneticHeading.ToString(CultureInfo.InvariantCulture),
-                MinRange.ToString(CultureInfo.InvariantCulture),
-                MaxRange.ToString(CultureInfo.InvariantCulture),
-                WaterTemperature.ToString(CultureInfo.InvariantCulture),
-                WaterSpeed.ToString(CultureInfo.InvariantCulture),
-                HardwareTime.ToString(),
-                Frequency.ToString(),
-                Milliseconds.ToString() + '\n'});
-
         public const int Size = 168;
+
         [FieldOffset(0)] public readonly uint PositionOfFirstByte; //(0)
         [FieldOffset(4)] public readonly uint UnknownAt4; //(4)
         [FieldOffset(8)] public readonly ushort TotalLength; //(8)
@@ -82,5 +65,33 @@ namespace SL3Reader
         [FieldOffset(156)] public readonly uint UnknownAt156;
         [FieldOffset(160)] public readonly uint UnknownAt160;
         [FieldOffset(164)] public readonly uint Last3DChannelFrameOffset;  //(164)
+
+        public override string ToString() =>
+        string.Join(',', new string[]
+        {
+            SurveyType.ToString(),
+            WaterDepth.ToString(InvariantCulture),
+            X.ToString(),
+            Y.ToString(),
+            GNSSAltitude.ToString(InvariantCulture),
+            GNSSHeading.ToString(InvariantCulture),
+            GNSSSpeed.ToString(InvariantCulture),
+            MagneticHeading.ToString(InvariantCulture),
+            MinRange.ToString(InvariantCulture),
+            MaxRange.ToString(InvariantCulture),
+            WaterTemperature.ToString(InvariantCulture),
+            WaterSpeed.ToString(InvariantCulture),
+            HardwareTime.ToString(),
+            Frequency.ToString(),
+            Milliseconds.ToString() + '\n'});
+
+        private string GetDebuggerDisplay() =>
+            string.Join("; ", new string[4]
+            {
+                SurveyType.ToString(),
+                WaterDepth.ToString(InvariantCulture) + '′',
+                MinRange.ToString(InvariantCulture),
+                MaxRange.ToString(InvariantCulture)
+            });
     }
 }
