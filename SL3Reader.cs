@@ -23,6 +23,8 @@ namespace SL3Reader
                     const int factor = 2118; // Empirically set value to avoid frequent resize of the underlying array.
                     frames = new((int)(Length / factor));
                     frames.AddRange(this);
+                    if (frames.Count > 0)
+                        Frame.Init(frames[0].HardwareTime);
                 }
                 return frames;
             }
@@ -61,6 +63,8 @@ namespace SL3Reader
                     localFrames.Add(frame);
                 }
                 frames = localFrames;
+                if(localFrames.Count > 0)
+                    Frame.Init(localFrames[0].HardwareTime);
             }
             else
             {

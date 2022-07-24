@@ -14,7 +14,7 @@ namespace SL3Reader
                 return;
             }
             using SL3Reader sl3reader = new(input);
-            sl3reader.ExportToCSV(output = Path.GetFullPath(args[1]));
+            sl3reader.ExportToCSV(output = Path.GetFullPath(args[1]), true);
         }
     }
 }

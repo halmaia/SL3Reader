@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using static System.Globalization.CultureInfo;
 using System.Runtime.InteropServices;
+using System;
 
 namespace SL3Reader
 {
@@ -65,6 +66,15 @@ namespace SL3Reader
         [FieldOffset(156)] public readonly uint UnknownAt156;
         [FieldOffset(160)] public readonly uint UnknownAt160;
         [FieldOffset(164)] public readonly uint Last3DChannelFrameOffset;  //(164)
+
+        #region DateTime support
+        private static DateTime baseDateTime;
+        public DateTime Timestamp => baseDateTime.AddMilliseconds(Milliseconds);
+
+        internal static void Init(uint hardwareTime) =>
+            baseDateTime = DateTimeOffset.FromUnixTimeSeconds(hardwareTime)
+                .UtcDateTime;
+        #endregion
 
         public override string ToString() =>
         string.Join(',', new string[]
