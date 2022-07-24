@@ -10,7 +10,7 @@ namespace SL3Reader
 {
     [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
     public class SL3Reader :
-        FileStream, IEnumerable<Frame>, IEnumerable
+        FileStream, IEnumerable<Frame>, IEnumerable, IReadOnlyList<Frame>
     {
 
         private List<Frame> frames = null;
@@ -27,6 +27,10 @@ namespace SL3Reader
                 return frames;
             }
         }
+
+        public int Count => Frames.Count;
+
+        public Frame this[int index] => Frames[index];
 
         public unsafe SL3Reader(string path) :
            base(path, FileMode.Open, FileAccess.Read,
