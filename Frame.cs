@@ -6,7 +6,7 @@ namespace SL3Reader
 {
     [StructLayout(LayoutKind.Explicit, Size = Size)]
     [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
-    internal readonly struct Frame
+    public readonly struct Frame
     {
         public const int Size = 168;
 

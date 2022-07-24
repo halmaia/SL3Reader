@@ -3,7 +3,7 @@
 namespace SL3Reader
 {
     [Flags]
-    internal enum DataValidity : ushort
+    public enum DataValidity : ushort
     {
         TrackValid = 1,
         UnknownAt1 = 2,

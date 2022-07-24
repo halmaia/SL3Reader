@@ -12,9 +12,25 @@ namespace SL3Reader
     public class SL3Reader :
         FileStream, IEnumerable<Frame>, IEnumerable
     {
+
+        private List<Frame> frames = null;
+        public IReadOnlyList<Frame> Frames
+        {
+            get
+            {
+                if (frames is null)
+                {
+                    const int factor = 2118; // Empirically set value to avoid frequent resize of the underlying array.
+                    frames = new((int)(Length / factor));
+                    frames.AddRange(this);
+                }
+                return frames;
+            }
+        }
+
         public unsafe SL3Reader(string path) :
            base(path, FileMode.Open, FileAccess.Read,
-           FileShare.Read, 4096, FileOptions.SequentialScan)
+           FileShare.Read, 4096, FileOptions.RandomAccess)
         {
             SLFileHeader* pFileHeader = stackalloc SLFileHeader[1];
             ReadExactly(new(pFileHeader, SLFileHeader.Size));
@@ -23,29 +39,39 @@ namespace SL3Reader
                 throw new InvalidDataException("Unsupported file type. Expected type SL3.");
         }
 
-        // Under construction:
-        //public static void ExportTiff(IReadOnlyList<long> offsets)
-        //{
-        //    throw new NotImplementedException();
 
-        //    BitmapSource bitmapSource;
-        //}
-
-        //public IReadOnlyList<Frame> GetAsFrameList()
-        //{
-        //    return new List<Frame>(this);
-        //}
-
-        public void ExportToCSV(string path)
+        public void ExportToCSV(string path, bool reuseFrames = false)
         {
             const string CSVHeader = "SurveyType,WaterDepth,X,Y,GNSSAltitude,GNSSHeading,GNSSSpeed,MagneticHeading,MinRange,MaxRange,WaterTemperature,WaterSpeed,HardwareTime,Frequency,Milliseconds\n";
 
-            using StreamWriter stream = File.CreateText(path);
-            stream.Write(CSVHeader); // Should be updated to C♯ 11.
-            foreach (Frame frame in this)
+            using StreamWriter streamWriter = File.CreateText(path);
+            streamWriter.Write(CSVHeader); // Should be updated to C♯ 11 to write Span directly.
+     
+            if (reuseFrames && frames is null)
             {
-                stream.Write(frame.ToString());
+                const int factor = 2118; // Empirically set value to avoid frequent resize of the underlying array.
+                List<Frame> localFrames = new((int)(Length / factor));
+                foreach (Frame frame in this)
+                {
+                    streamWriter.Write(frame.ToString());
+                    localFrames.Add(frame);
+                }
+                frames = localFrames;
             }
+            else
+            {
+                IEnumerable<Frame> collection = (IEnumerable<Frame>)frames ?? this; // To avoid double runs.
+                foreach (Frame frame in collection)
+                {
+                    streamWriter.Write(frame.ToString());
+                }
+            }
+            streamWriter.Close();
+        }
+
+        public void ExportToBmp(IReadOnlyList<uint> frameIndices, string path)
+        {
+            throw new NotImplementedException();
         }
 
         private string GetDebuggerDisplay() => Name;
@@ -75,7 +101,7 @@ namespace SL3Reader
                 this.source = source;
                 fileLength = source.Length;
 
-                pCurrent = (Frame*)AlignedAlloc(new(Frame.Size), new(sizeof(long) / 8u));
+                pCurrent = (Frame*)AlignedAlloc(new(Frame.Size), new(sizeof(long)));
 
                 ((IEnumerator)this).Reset();
             }
@@ -102,7 +128,6 @@ namespace SL3Reader
                 AlignedFree(pCurrent);
             }
         }
-
         #endregion End: enumerator support
     }
 }

@@ -1,6 +1,6 @@
 ﻿namespace SL3Reader
 {
-    internal enum SurveyType : ushort
+    public enum SurveyType : ushort
     {
         Primary, Secondary, DownScan,
         LeftSidescan, RightSidescan,
