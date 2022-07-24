@@ -10,7 +10,7 @@ namespace SL3Reader
 {
     [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
     public class SL3Reader :
-        FileStream, IEnumerable<Frame>, IEnumerable, IReadOnlyList<Frame>
+        FileStream, IEnumerable<Frame>, IEnumerable, IReadOnlyList<Frame>, IReadOnlyCollection<Frame>
     {
 
         private List<Frame> frames = null;
