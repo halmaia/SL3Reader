@@ -69,14 +69,13 @@ namespace SL3Reader
 
         #region DateTime support
         private static DateTime baseDateTime;
-        public DateTime Timestamp => baseDateTime.AddMilliseconds(Milliseconds);
-
         internal static void Init(uint hardwareTime) =>
-            baseDateTime = DateTimeOffset.FromUnixTimeSeconds(hardwareTime)
-                .UtcDateTime;
+                 baseDateTime = DateTimeOffset.FromUnixTimeSeconds(hardwareTime)
+                 .UtcDateTime;
+        public DateTime Timestamp => baseDateTime.AddMilliseconds(Milliseconds);
         #endregion
 
-        public override string ToString() =>
+        public readonly override string ToString() =>
         string.Join(',', new string[]
         {
             SurveyType.ToString(),
@@ -95,7 +94,7 @@ namespace SL3Reader
             Frequency.ToString(),
             Milliseconds.ToString() + '\n'});
 
-        private string GetDebuggerDisplay() =>
+        private readonly string GetDebuggerDisplay() =>
             string.Join("; ", new string[4]
             {
                 SurveyType.ToString(),

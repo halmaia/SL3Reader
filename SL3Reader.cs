@@ -8,7 +8,7 @@ using static System.Runtime.InteropServices.NativeMemory;
 
 namespace SL3Reader
 {
-    [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
+    [DebuggerDisplay($"{{{nameof(Name)}(),nq}}")]
     public class SL3Reader :
         FileStream, IEnumerable<Frame>, IEnumerable, IReadOnlyList<Frame>, IReadOnlyCollection<Frame>
     {
@@ -81,8 +81,6 @@ namespace SL3Reader
         {
             throw new NotImplementedException();
         }
-
-        private string GetDebuggerDisplay() => Name;
 
         #region Enumerator support
         IEnumerator<Frame> IEnumerable<Frame>.GetEnumerator() =>

@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace SL3Reader
 {
     [StructLayout(LayoutKind.Sequential, Size = Size)]
-    [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
+    [DebuggerDisplay($"{{{nameof(ToString)}(),nq}}")]
     internal readonly ref struct SLFileHeader
     {
         internal const int Size = 8;
@@ -21,12 +21,10 @@ namespace SL3Reader
 
         internal short Reserved => reserved;
 
-        public override string ToString() => fileFormat.ToString() + " (" + blockSize.ToString() + ')';
+        public readonly override string ToString() => fileFormat.ToString() + " (" + blockSize.ToString() + ')';
 
-        private string GetDebuggerDisplay() => ToString();
-
-        public bool IsValidSLFile => fileFormat == LogFileFormats.SLG;
-        public bool IsValidSL2File => fileFormat == LogFileFormats.SL2;
-        public bool IsValidSL3File => fileFormat == LogFileFormats.SL3;
+        public readonly bool IsValidSLFile => fileFormat == LogFileFormats.SLG;
+        public readonly bool IsValidSL2File => fileFormat == LogFileFormats.SL2;
+        public readonly bool IsValidSL3File => fileFormat == LogFileFormats.SL3;
     }
 }
