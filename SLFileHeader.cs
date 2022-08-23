@@ -1,30 +1,31 @@
 ﻿using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace SL3Reader
 {
     [StructLayout(LayoutKind.Sequential, Size = Size)]
     [DebuggerDisplay($"{{{nameof(ToString)}(),nq}}")]
-    internal readonly ref struct SLFileHeader
+    public readonly ref struct SLFileHeader
     {
-        internal const int Size = 8;
+        public const int Size = 8;
 
-        private readonly LogFileFormats fileFormat;
+        private readonly LogFileFormat fileFormat;
         private readonly short deviceID;
         private readonly short blockSize;
         private readonly short reserved;
 
-        internal LogFileFormats FileFormat => fileFormat;
-        internal short DeviceID => deviceID;
+        public readonly LogFileFormat FileFormat => fileFormat;
+        public readonly short DeviceID => deviceID;
 
-        internal short BlockSize => blockSize;
+        public readonly short BlockSize => blockSize;
 
-        internal short Reserved => reserved;
+        public readonly short Reserved => reserved;
 
         public readonly override string ToString() => fileFormat.ToString() + " (" + blockSize.ToString() + ')';
 
-        public readonly bool IsValidSLFile => fileFormat == LogFileFormats.SLG;
-        public readonly bool IsValidSL2File => fileFormat == LogFileFormats.SL2;
-        public readonly bool IsValidSL3File => fileFormat == LogFileFormats.SL3;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly bool IsValidFormat(LogFileFormat fileFormatToTest) => 
+            fileFormat == fileFormatToTest;
     }
 }

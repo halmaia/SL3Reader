@@ -68,11 +68,11 @@ namespace SL3Reader
         [FieldOffset(164)] public readonly uint Last3DChannelFrameOffset;  //(164)
 
         #region DateTime support
-        private static DateTime baseDateTime;
-        internal static void Init(uint hardwareTime) =>
-                 baseDateTime = DateTimeOffset.FromUnixTimeSeconds(hardwareTime)
+        private static DateTime timestampBase;
+        internal static void InitTimestampBase(uint hardwareTime) =>
+                 timestampBase = DateTimeOffset.FromUnixTimeSeconds(hardwareTime)
                  .UtcDateTime;
-        public DateTime Timestamp => baseDateTime.AddMilliseconds(Milliseconds);
+        public readonly DateTime Timestamp => timestampBase.AddMilliseconds(Milliseconds);
         #endregion
 
         public readonly override string ToString() =>
@@ -92,7 +92,7 @@ namespace SL3Reader
             WaterSpeed.ToString(InvariantCulture),
             HardwareTime.ToString(),
             Frequency.ToString(),
-            Milliseconds.ToString() + '\n'});
+            Milliseconds.ToString()});
 
         private readonly string GetDebuggerDisplay() =>
             string.Join("; ", new string[4]
