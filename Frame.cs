@@ -75,24 +75,27 @@ namespace SL3Reader
         public readonly DateTime Timestamp => timestampBase.AddMilliseconds(Milliseconds);
         #endregion
 
-        public readonly override string ToString() =>
-        string.Join(',', new string[]
+        public readonly override string ToString()
+        {
+            IFormatProvider culture = InvariantCulture;
+            return string.Join(',', new string[]
         {
             SurveyType.ToString(),
-            WaterDepth.ToString(InvariantCulture),
+            WaterDepth.ToString(culture),
             X.ToString(),
             Y.ToString(),
-            GNSSAltitude.ToString(InvariantCulture),
-            GNSSHeading.ToString(InvariantCulture),
-            GNSSSpeed.ToString(InvariantCulture),
-            MagneticHeading.ToString(InvariantCulture),
-            MinRange.ToString(InvariantCulture),
-            MaxRange.ToString(InvariantCulture),
-            WaterTemperature.ToString(InvariantCulture),
-            WaterSpeed.ToString(InvariantCulture),
+            GNSSAltitude.ToString(culture),
+            GNSSHeading.ToString(culture),
+            GNSSSpeed.ToString(culture),
+            MagneticHeading.ToString(culture),
+            MinRange.ToString(culture),
+            MaxRange.ToString(culture),
+            WaterTemperature.ToString(culture),
+            WaterSpeed.ToString(culture),
             HardwareTime.ToString(),
             Frequency.ToString(),
             Milliseconds.ToString()});
+        }
 
         private readonly string GetDebuggerDisplay() =>
             string.Join("; ", new string[4]

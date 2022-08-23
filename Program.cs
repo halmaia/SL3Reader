@@ -16,6 +16,10 @@ namespace SL3Reader
             }
             using SL3Reader sl3reader = new(input);
             // Experiment:
+            //FrameList frms = sl3reader.SideScanFrames;
+            //Frame x = frms[0];
+
+            // Experiment:
 //            System.Collections.Generic.IReadOnlyList<Frame> frames = sl3reader.Frames;
 //            Frame frame = frames[31];
 //            sl3reader.Seek(Frame.Size + frame.PositionOfFirstByte, SeekOrigin.Begin);
@@ -31,7 +35,7 @@ namespace SL3Reader
 //            }
 
             //
-            sl3reader.ExportToCSV(output = Path.GetFullPath(args[1]), true);
+            sl3reader.ExportToCSV(output = Path.GetFullPath(args[1]), false);
         }
     }
 }

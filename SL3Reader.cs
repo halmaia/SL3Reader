@@ -18,14 +18,49 @@ namespace SL3Reader
         {
             get
             {
-                if (frames is null)
-                {
-                    frames = CreateNewFrameList();
-                    frames.AddRange(this);
-                }
+                frames ??= CreateNewFrameList(this);
                 return frames;
             }
         }
+
+        private FrameList sideScanFrames, downScanFrames;
+        public FrameList SideScanFrames
+        {
+            get
+            {
+                if (sideScanFrames is null)
+                {
+                    PopulateImageIndices();
+                }
+                return sideScanFrames;
+            }
+        }
+
+        private void PopulateImageIndices()
+        {
+            var localFrames = Frames;
+            FrameList sideScans = new(localFrames);
+            FrameList downScans = new(localFrames);
+
+            for (int i = 0; i < localFrames.Count; i++)
+            {
+                switch (localFrames[i].SurveyType)
+                {
+                    case SurveyType.SideScan:
+                        {
+                            sideScans.Add(i);
+                            continue;
+                        }
+                    case SurveyType.DownScan:
+                        {
+                            downScans.Add(i);
+                            continue;
+                        }
+                }
+            }
+            sideScanFrames = sideScans; downScanFrames = downScans;
+        }
+
         public int Count => Frames.Count; // Can't be readonly hence the Frames could be initialized.
 
         public Frame this[int index] => Frames[index]; // Can't be readonly hence the Frames could be initialized.
@@ -46,6 +81,13 @@ namespace SL3Reader
         {
             const long averageFrameSize = 2118L; // Empirically set value to avoid frequent resize of the underlying array.
             return new((int)(Length / averageFrameSize));
+        }
+
+        private List<Frame> CreateNewFrameList(IEnumerable<Frame> enumerable)
+        {
+            List<Frame> list = CreateNewFrameList();
+            list.AddRange(enumerable);
+            return list;
         }
 
         public void ExportToCSV(string path, bool reuseFrames = false)
@@ -70,8 +112,7 @@ namespace SL3Reader
             }
             else
             {
-                IEnumerable<Frame> collection = (IEnumerable<Frame>)frames ?? this; // To avoid repeated runs.
-                foreach (Frame frame in collection)
+                foreach (Frame frame in this)
                 {
                     // Write & WriteLine calling the same
                     //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
@@ -89,17 +130,17 @@ namespace SL3Reader
 
         #region Enumerator support
         IEnumerator<Frame> IEnumerable<Frame>.GetEnumerator() =>
-            new Enumerator(this);
+            frames is null ? new Enumerator(this) : frames.GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() =>
-            new Enumerator(this);
+            frames is null ? new Enumerator(this) : frames.GetEnumerator();
         public readonly struct Enumerator : IEnumerator<Frame>, IEnumerator
         {
             private readonly SL3Reader source;
             private unsafe readonly Frame* pCurrent;
             private readonly long fileLength;
-            unsafe Frame IEnumerator<Frame>.Current => *pCurrent;
-            unsafe object IEnumerator.Current => *pCurrent;
+            readonly unsafe Frame IEnumerator<Frame>.Current => *pCurrent;
+            readonly unsafe object IEnumerator.Current => *pCurrent;
 
             public unsafe Enumerator(SL3Reader source)
             {
@@ -111,14 +152,12 @@ namespace SL3Reader
                 this.source = source;
                 fileLength = source.Length;
 
-                pCurrent = (Frame*)AlignedAlloc(new(Frame.Size), new(sizeof(long)));
+                pCurrent = (Frame*)AlignedAlloc(Frame.Size, (nuint)nuint.Size);
 
                 // The state of the source is unknown, so we have to reset the stream.
-                ((IEnumerator)this).Reset();
-
+                Reset();
                 InitTimestamp();
-
-                ((IEnumerator)this).Reset();
+                Reset();
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -127,7 +166,7 @@ namespace SL3Reader
                 if (source.Read(new(pCurrent, Frame.Size)) != Frame.Size)
                     throw new IOException("Unable to read. It could be due to EOF or IO error.");
                 // No need to read the whole frame: will be checked at IEnumerator.MoveNext().
-               
+
                 Frame.InitTimestampBase(pCurrent->HardwareTime);
             }
 
@@ -136,12 +175,12 @@ namespace SL3Reader
                 SL3Reader stream = source;
                 Frame* currentFrame = pCurrent;
 
-               return stream.Read(new(currentFrame, Frame.Size)) == Frame.Size && // If false: unable to read. It could be due to EOF or IO error.
-                      stream.Seek(currentFrame->TotalLength - Frame.Size, SeekOrigin.Current) < fileLength; // If false: Avoid returning non-complete frame.
+                return stream.Read(new(currentFrame, Frame.Size)) == Frame.Size && // If false: unable to read. It could be due to EOF or IO error.
+                       stream.Seek(currentFrame->TotalLength - Frame.Size, SeekOrigin.Current) < fileLength; // If false: Avoid returning non-complete frame.
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            void IEnumerator.Reset()
+            public void Reset()
             {
                 if (source.Seek(SLFileHeader.Size, SeekOrigin.Begin) != SLFileHeader.Size)
                     throw new IOException("Unable to seek.");
