@@ -11,10 +11,14 @@ namespace SL3Reader
 {
     [DebuggerDisplay("{Name}")]
     public class SL3Reader :
-        FileStream, IEnumerable<Frame>, IEnumerable, IReadOnlyList<Frame>, IReadOnlyCollection<Frame>
+        FileStream,
+        IEnumerable<IFrame>,
+        IEnumerable,
+        IReadOnlyList<IFrame>,
+        IReadOnlyCollection<IFrame>
     {
-        private List<Frame> frames;
-        public IReadOnlyList<Frame> Frames
+        private List<IFrame> frames;
+        public IReadOnlyList<IFrame> Frames
         {
             get
             {
@@ -63,7 +67,7 @@ namespace SL3Reader
 
         public int Count => Frames.Count; // Can't be readonly hence the Frames could be initialized.
 
-        public Frame this[int index] => Frames[index]; // Can't be readonly hence the Frames could be initialized.
+        public IFrame this[int index] => Frames[index]; // Can't be readonly hence the Frames could be initialized.
 
         public unsafe SL3Reader(string path) :
            base(path, FileMode.Open, FileAccess.Read,
@@ -77,15 +81,15 @@ namespace SL3Reader
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private List<Frame> CreateNewFrameList()
+        private List<IFrame> CreateNewFrameList()
         {
             const long averageFrameSize = 2118L; // Empirically set value to avoid frequent resize of the underlying array.
             return new((int)(Length / averageFrameSize));
         }
 
-        private List<Frame> CreateNewFrameList(IEnumerable<Frame> enumerable)
+        private List<IFrame> CreateNewFrameList(IEnumerable<IFrame> enumerable)
         {
-            List<Frame> list = CreateNewFrameList();
+            List<IFrame> list = CreateNewFrameList();
             list.AddRange(enumerable);
             return list;
         }
@@ -99,10 +103,10 @@ namespace SL3Reader
 
             if (reuseFrames && frames is null)
             {
-                List<Frame> localFrames = CreateNewFrameList();
+                List<IFrame> localFrames = CreateNewFrameList();
                 frames = localFrames;
 
-                foreach (Frame frame in this)
+                foreach (IFrame frame in this)
                 {
                     streamWriter.WriteLine(frame.ToString()); // Write & WriteLine calling the same
                     //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
@@ -112,7 +116,7 @@ namespace SL3Reader
             }
             else
             {
-                foreach (Frame frame in this)
+                foreach (IFrame frame in this)
                 {
                     // Write & WriteLine calling the same
                     //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
@@ -129,18 +133,26 @@ namespace SL3Reader
         }
 
         #region Enumerator support
-        IEnumerator<Frame> IEnumerable<Frame>.GetEnumerator() =>
-            frames is null ? new Enumerator(this) : frames.GetEnumerator();
+        IEnumerator<IFrame> IEnumerable<IFrame>.GetEnumerator() =>
+            frames is not null ? frames.GetEnumerator() : new Enumerator(this);
 
         IEnumerator IEnumerable.GetEnumerator() =>
-            frames is null ? new Enumerator(this) : frames.GetEnumerator();
-        public readonly struct Enumerator : IEnumerator<Frame>, IEnumerator
+            frames is not null ? frames.GetEnumerator() : new Enumerator(this);
+        public readonly struct Enumerator : IEnumerator<IFrame>, IEnumerator
         {
             private readonly SL3Reader source;
-            private unsafe readonly Frame* pCurrent;
+            private unsafe readonly ExtendedFrame* pCurrent;
             private readonly long fileLength;
-            readonly unsafe Frame IEnumerator<Frame>.Current => *pCurrent;
-            readonly unsafe object IEnumerator.Current => *pCurrent;
+            readonly unsafe IFrame IEnumerator<IFrame>.Current => GetCurrentFrame();
+            private readonly unsafe IFrame GetCurrentFrame()
+            {
+                ExtendedFrame* frame = pCurrent;
+                return frame->SurveyType is SurveyType.Unknown7 or SurveyType.Unknown8
+                    ? *(BasicFrame*)pCurrent
+                    : *frame;
+            }
+
+            readonly unsafe object IEnumerator.Current => GetCurrentFrame()
 
             public unsafe Enumerator(SL3Reader source)
             {
@@ -152,7 +164,7 @@ namespace SL3Reader
                 this.source = source;
                 fileLength = source.Length;
 
-                pCurrent = (Frame*)AlignedAlloc(Frame.Size, (nuint)nuint.Size);
+                pCurrent = (ExtendedFrame*)AlignedAlloc(ExtendedFrame.Size, (nuint)nuint.Size);
 
                 // The state of the source is unknown, so we have to reset the stream.
                 Reset();
@@ -163,20 +175,20 @@ namespace SL3Reader
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             private unsafe void InitTimestamp()
             {
-                if (source.Read(new(pCurrent, Frame.Size)) != Frame.Size)
+                if (source.Read(new(pCurrent, ExtendedFrame.Size)) != ExtendedFrame.Size)
                     throw new IOException("Unable to read. It could be due to EOF or IO error.");
                 // No need to read the whole frame: will be checked at IEnumerator.MoveNext().
 
-                Frame.InitTimestampBase(pCurrent->HardwareTime);
+                ExtendedFrame.InitTimestampBase(pCurrent->HardwareTime);
             }
 
             unsafe bool IEnumerator.MoveNext()
             {
                 SL3Reader stream = source;
-                Frame* currentFrame = pCurrent;
+                ExtendedFrame* currentFrame = pCurrent;
 
-                return stream.Read(new(currentFrame, Frame.Size)) == Frame.Size && // If false: unable to read. It could be due to EOF or IO error.
-                       stream.Seek(currentFrame->TotalLength - Frame.Size, SeekOrigin.Current) < fileLength; // If false: Avoid returning non-complete frame.
+                return stream.Read(new(currentFrame, ExtendedFrame.Size)) == ExtendedFrame.Size && // If false: unable to read. It could be due to EOF or IO error.
+                       stream.Seek(currentFrame->TotalLength - ExtendedFrame.Size, SeekOrigin.Current) < fileLength; // If false: Avoid returning non-complete frame.
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
