@@ -43,6 +43,9 @@ namespace SL3Reader
         float UnknownAt118 { get; }
         ushort UnknownAt122 { get; }
         uint Milliseconds { get; }
+
+        // Derived:
+        long DataOffset { get; }
     }
 
     public interface IFrameNavigation
@@ -111,6 +114,7 @@ namespace SL3Reader
         [field: FieldOffset(118)] public readonly float UnknownAt118 { get; } // (118)
         [field: FieldOffset(122)] public readonly ushort UnknownAt122 { get; } // (122)
         [field: FieldOffset(124)] public readonly uint Milliseconds { get; } // (124)
+        public readonly long DataOffset => PositionOfFirstByte + Size;
         #endregion IFrame
 
         #region DateTime support
@@ -118,7 +122,8 @@ namespace SL3Reader
         internal static void InitTimestampBase(uint hardwareTime) =>
                  timestampBase = DateTimeOffset.FromUnixTimeSeconds(hardwareTime)
                  .UtcDateTime;
-        public readonly DateTime Timestamp => timestampBase.AddMilliseconds(Milliseconds);
+        public readonly DateTime Timestamp =>
+            timestampBase.AddMilliseconds(Milliseconds);
         #endregion
 
         public readonly override string ToString()
@@ -205,6 +210,8 @@ namespace SL3Reader
         [field: FieldOffset(118)] public readonly float UnknownAt118 { get; } // (118)
         [field: FieldOffset(122)] public readonly ushort UnknownAt122 { get; } // (122)
         [field: FieldOffset(124)] public readonly uint Milliseconds { get; } // (124)
+
+        public readonly long DataOffset => PositionOfFirstByte + Size;
         #endregion IFrame
 
         #region IFrameNavigation

@@ -18,9 +18,11 @@ namespace SL3Reader
         public FrameList(int capacity, IReadOnlyList<IFrame> contents) : base(capacity) =>
              this.contents = contents ?? throw new ArgumentNullException(nameof(contents));
 
-        public new IFrame this[int index] => contents[index]; // The new keyword hides the orignal "this".
-       
-        IEnumerator<IFrame> IEnumerable<IFrame>.GetEnumerator() => 
-            contents.GetEnumerator();
+        public new IFrame this[int index] => contents[base[index]]; // The new keyword hides the orignal "this".
+
+        IEnumerator<IFrame> IEnumerable<IFrame>.GetEnumerator()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

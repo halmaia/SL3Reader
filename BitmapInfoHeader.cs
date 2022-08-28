@@ -31,7 +31,7 @@ namespace SL3Reader
             Planes = 1;
             BitCount = bitCount;
             Compression = BitmapCompressionMode.BI_RGB;
-            ImageSize = (uint)(bitCount / 8 * height * (width + (4 - width % 4)));
+            ImageSize = (uint)(bitCount / 8 * height * width); // (width + (4 - width % 4))
             XPixelsPerMeter = xPixelsPerMeter;
             YPixelsPerMeter = yPixelsPerMeter;
             NumberOfUsedColors = 256;

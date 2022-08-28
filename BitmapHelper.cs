@@ -4,12 +4,12 @@ namespace SL3Reader
 {
     public static class BitmapHelper
     {
-        private const int bufferPrototypeLength =
+        public const int BitmapHeaderSize =
                             BitmapFileHeader.Size +
                             BitmapInfoHeader.Size +
                             256 * Bgra.Size;
 
-        private static readonly byte[] bufferPrototype = new byte[bufferPrototypeLength]
+        private static readonly byte[] basicImageBuffer = new byte[BitmapHeaderSize]
 
         {
             0,0,0,0,0,0,0,0,0,0,
@@ -280,9 +280,11 @@ namespace SL3Reader
 
         public static byte[] CreateBuffer(int maxHeight, int maxWidth)
         {
-            byte[] buffer = GC.AllocateUninitializedArray<byte>(bufferPrototypeLength +
-                                               (maxHeight * (maxWidth + (4 - maxWidth % 4))));
-            Buffer.BlockCopy(bufferPrototype, 0, buffer, 0, bufferPrototypeLength);
+            // (maxHeight * (maxWidth + (4 - maxWidth % 4))));
+            byte[] buffer = GC.AllocateUninitializedArray<byte>(
+                BitmapHeaderSize +
+                maxHeight * maxWidth);
+            Buffer.BlockCopy(basicImageBuffer, 0, buffer, 0, BitmapHeaderSize);
             return buffer;
         }
 
@@ -293,19 +295,18 @@ namespace SL3Reader
             out Span<byte> fullBuffer,
             out Span<byte> dataBuffer)
         {
-            int offset;
-            fullStride = width + (4 - (width % 4));
+
+            fullStride = width; //width + (4 - (width % 4));
 
             fixed (byte* pBuffer = buffer)
             {
                 BitmapFileHeader* fileHeader = (BitmapFileHeader*)pBuffer;
                 *fileHeader = new(width, height);
                 fileSize = fileHeader->FileSize;
-                offset = (int)fileHeader->OffsetOfImageData;
                 *(BitmapInfoHeader*)(pBuffer + BitmapFileHeader.Size) = new(width, height);
             }
             fullBuffer = buffer.AsSpan();
-            dataBuffer = fullBuffer[offset..(int)fileSize];
+            dataBuffer = fullBuffer[BitmapHeaderSize..];
         }
     }
 }

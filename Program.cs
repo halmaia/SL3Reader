@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Runtime.InteropServices;
 
 namespace SL3Reader
 {
@@ -16,8 +15,7 @@ namespace SL3Reader
             }
             using SL3Reader sl3reader = new(input);
             // Experiment:
-            //FrameList frms = sl3reader.SideScanFrames;
-            //Frame x = frms[0];
+            //sl3reader.ExportSideScans(@"F:\y.bmp");
 
             // Experiment:
 //            System.Collections.Generic.IReadOnlyList<Frame> frames = sl3reader.Frames;

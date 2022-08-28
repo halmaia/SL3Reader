@@ -15,10 +15,9 @@ namespace SL3Reader
 
         public BitmapFileHeader(int width, int height) 
         {
-            const int Offset = BitmapFileHeader.Size + BitmapInfoHeader.Size + 256 * Bgra.Size; // 1078; 
-            OffsetOfImageData = Offset; 
+            OffsetOfImageData = BitmapHelper.BitmapHeaderSize;
             Reserved1 = 0; Reserved2 = 0; Type = 19778;
-            FileSize = (uint)(Offset + (height * (width + (4 - width % 4))));
+            FileSize = (uint)(BitmapHelper.BitmapHeaderSize + height * width); // (width + (4 - width % 4))
         }
     }
 

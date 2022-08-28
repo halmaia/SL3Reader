@@ -28,21 +28,19 @@ namespace SL3Reader
         }
 
         private FrameList sideScanFrames, downScanFrames;
-        public FrameList SideScanFrames
+        private FrameList SideScanFrames
         {
             get
             {
                 if (sideScanFrames is null)
-                {
                     PopulateImageIndices();
-                }
                 return sideScanFrames;
             }
         }
 
         private void PopulateImageIndices()
         {
-            var localFrames = Frames;
+            IReadOnlyList<IFrame> localFrames = Frames;
             FrameList sideScans = new(localFrames);
             FrameList downScans = new(localFrames);
 
@@ -53,12 +51,12 @@ namespace SL3Reader
                     case SurveyType.SideScan:
                         {
                             sideScans.Add(i);
-                            continue;
+                            break;
                         }
                     case SurveyType.DownScan:
                         {
                             downScans.Add(i);
-                            continue;
+                            break;
                         }
                 }
             }
@@ -127,9 +125,31 @@ namespace SL3Reader
             streamWriter.Close();
         }
 
-        public void ExportToBmp(IReadOnlyList<uint> frameIndices, string path)
+        public void ExportSideScans(string path)
         {
-            throw new NotImplementedException();
+            FrameList sideScanFrames = SideScanFrames;
+            int frameCount = sideScanFrames.Count;
+            const int width = 2800;
+            // TODO: create slicer!
+            byte[] buffer = BitmapHelper.CreateBuffer(frameCount, width);
+            BitmapHelper.UpdateBuffer(buffer, frameCount, width,
+                out long fileSize, out int fullStride,
+                out Span<byte> fullBuffer,
+                out Span<byte> dataBuffer);
+
+            for (int i = 0; i < frameCount; i++)
+            {
+                long dataOffset = sideScanFrames[i].DataOffset;
+                if (Seek(dataOffset, SeekOrigin.Begin) != dataOffset)
+                {
+                    throw new IOException("Unable to seek.");
+                }
+
+                ReadExactly(dataBuffer.Slice(i * fullStride, width));
+            }
+
+            using FileStream stream = File.OpenWrite(path);
+            stream.Write(fullBuffer);
         }
 
         #region Enumerator support
@@ -144,6 +164,8 @@ namespace SL3Reader
             private unsafe readonly ExtendedFrame* pCurrent;
             private readonly long fileLength;
             readonly unsafe IFrame IEnumerator<IFrame>.Current => GetCurrentFrame();
+            readonly unsafe object IEnumerator.Current => GetCurrentFrame();
+
             private readonly unsafe IFrame GetCurrentFrame()
             {
                 ExtendedFrame* frame = pCurrent;
@@ -151,9 +173,6 @@ namespace SL3Reader
                     ? *(BasicFrame*)pCurrent
                     : *frame;
             }
-
-            readonly unsafe object IEnumerator.Current => GetCurrentFrame()
-
             public unsafe Enumerator(SL3Reader source)
             {
                 bool lockTaken = false;
