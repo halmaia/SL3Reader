@@ -193,32 +193,64 @@ namespace SL3Reader
             streamWriter.Close();
         }
 
-        public void ExportSideScans(string path)
+        public void ExportSideScans(string directory)
         {
+            DirectoryInfo dir = new(directory);
+            dir.Create();
+
             const int width = 2800;
             FrameList sideScanFrames = SideScanFrames;
             int frameCount = sideScanFrames.Count;
+            if (frameCount < 1) return;
+            int maxHeight = 1, currentHeiht = 0;
+            int i = 0;
+            List<int> breakpoints = new(); // TODO: add capacity
+            float maxRange = sideScanFrames[0].MaxRange;
 
-            // TODO: create slicer!
-            byte[] buffer = BitmapHelper.CreateBuffer(frameCount, width);
-            BitmapHelper.UpdateBuffer(buffer, frameCount, width,
-                out long fileSize, out int fullStride,
+            for (; i < frameCount; i++)
+            {
+                float currentMaxRange = sideScanFrames[i].MaxRange;
+                currentHeiht++; // Should be here due to the zero indexing.
+                if (currentMaxRange != maxRange)
+                {
+                    maxRange = currentMaxRange;
+                    breakpoints.Add(i);
+                    if (currentHeiht > maxHeight)
+                        maxHeight = currentHeiht;
+                    currentHeiht = 0;
+                    continue;
+                }
+                
+            }
+            if (currentHeiht > maxHeight)
+                maxHeight = currentHeiht;
+
+            byte[] buffer = BitmapHelper.CreateBuffer(maxHeight, width);
+
+            i = 0;
+            foreach (int breakpoint in breakpoints)
+            {
+                BitmapHelper.UpdateBuffer(buffer, breakpoint - i, width,
+                out int fullStride,
                 out Span<byte> fullBuffer,
                 out Span<byte> dataBuffer);
 
-            for (int i = 0; i < frameCount; i++)
-            {
-                long dataOffset = sideScanFrames[i].DataOffset;
-                if (Seek(dataOffset, SeekOrigin.Begin) != dataOffset)
+                int k = 0;
+                for (; i < breakpoint; i++)
                 {
-                    throw new IOException("Unable to seek.");
-                }
+                    long dataOffset = sideScanFrames[i].DataOffset;
+                    if (Seek(dataOffset, SeekOrigin.Begin) != dataOffset)
+                    {
+                        throw new IOException("Unable to seek.");
+                    }
 
-                ReadExactly(dataBuffer.Slice(i * fullStride, width));
+                    ReadExactly(dataBuffer.Slice(k++ * fullStride, width));
+                }
+                using FileStream stream = File.OpenWrite(Path.Combine(dir.FullName,$"SS_{breakpoint}.bmp"));
+                stream.Write(fullBuffer);
+                stream.Close();
             }
 
-            using FileStream stream = File.OpenWrite(path);
-            stream.Write(fullBuffer);
         }
 
         #region Enumerator support

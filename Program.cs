@@ -15,7 +15,7 @@ namespace SL3Reader
             }
             using SL3Reader sl3reader = new(input);
             // Experiment:
-            //sl3reader.ExportSideScans(@"F:\y.bmp");
+            sl3reader.ExportSideScans(@"F:\SS");
 
             // Experiment:
 //            System.Collections.Generic.IReadOnlyList<Frame> frames = sl3reader.Frames;

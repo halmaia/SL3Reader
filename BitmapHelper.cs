@@ -290,23 +290,22 @@ namespace SL3Reader
 
         public static unsafe void UpdateBuffer(byte[] buffer,
             int height, int width,
-            out long fileSize,
             out int fullStride,
-            out Span<byte> fullBuffer,
-            out Span<byte> dataBuffer)
+            out Span<byte> imageFile,
+            out Span<byte> pixelData)
         {
 
             fullStride = width; //width + (4 - (width % 4));
-
+            int fileSize;
             fixed (byte* pBuffer = buffer)
             {
                 BitmapFileHeader* fileHeader = (BitmapFileHeader*)pBuffer;
                 *fileHeader = new(width, height);
-                fileSize = fileHeader->FileSize;
+                fileSize =(int) fileHeader->FileSize;
                 *(BitmapInfoHeader*)(pBuffer + BitmapFileHeader.Size) = new(width, height);
             }
-            fullBuffer = buffer.AsSpan();
-            dataBuffer = fullBuffer[BitmapHeaderSize..];
+            imageFile = new Span<byte>(buffer, 0, fileSize);
+            pixelData = imageFile[BitmapHeaderSize..];
         }
     }
 }
