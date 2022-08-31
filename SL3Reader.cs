@@ -27,24 +27,81 @@ namespace SL3Reader
             }
         }
 
-        private FrameList sideScanFrames, downScanFrames;
+        #region Image Export
+        private FrameList sideScanFrames,
+            downScanFrames,
+            primaryScanFrames,
+            secondaryScanFrames,
+            unknown7ScanFrames;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void EnsureScanIndicesAvaliability()
+        {
+            if (sideScanFrames is null)
+                PopulateImageIndices();
+        }
         private FrameList SideScanFrames
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (sideScanFrames is null)
-                    PopulateImageIndices();
+                EnsureScanIndicesAvaliability();
                 return sideScanFrames;
+            }
+        }
+
+        private FrameList DownScanFrames
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                EnsureScanIndicesAvaliability();
+                return downScanFrames;
+            }
+        }
+
+        private FrameList PrimaryScanFrames
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                EnsureScanIndicesAvaliability();
+                return primaryScanFrames;
+            }
+        }
+
+        private FrameList SecondaryScanFrames
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                EnsureScanIndicesAvaliability();
+                return secondaryScanFrames;
+            }
+        }
+
+        private FrameList Unknown7ScanFrames
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                EnsureScanIndicesAvaliability();
+                return unknown7ScanFrames;
             }
         }
 
         private void PopulateImageIndices()
         {
             IReadOnlyList<IFrame> localFrames = Frames;
-            FrameList sideScans = new(localFrames);
-            FrameList downScans = new(localFrames);
+            int localCount = localFrames.Count;
+            FrameList sideScans = new(localFrames),
+                      downScans = new(localFrames),
+                      primaryScans = new(localFrames),
+                      secondaryScans = new(localFrames),
+                      unknown7Scans = new(localFrames);
 
-            for (int i = 0; i < localFrames.Count; i++)
+
+            for (int i = 0; i < localCount; i++)
             {
                 switch (localFrames[i].SurveyType)
                 {
@@ -58,10 +115,21 @@ namespace SL3Reader
                             downScans.Add(i);
                             break;
                         }
+                    case SurveyType.Primary:
+                        { primaryScans.Add(i); break; }
+                    case SurveyType.Secondary:
+                        { secondaryScans.Add(i); break; }
+                    case SurveyType.Unknown7:
+                        { unknown7Scans.Add(i); break; }
                 }
             }
-            sideScanFrames = sideScans; downScanFrames = downScans;
+            sideScanFrames = sideScans;
+            downScanFrames = downScans;
+            primaryScanFrames = primaryScans;
+            secondaryScanFrames = secondaryScans;
+            unknown7ScanFrames = unknown7Scans;
         }
+        #endregion Image Export
 
         public int Count => Frames.Count; // Can't be readonly hence the Frames could be initialized.
 
@@ -92,7 +160,7 @@ namespace SL3Reader
             return list;
         }
 
-        public void ExportToCSV(string path, bool reuseFrames = false)
+        public unsafe void ExportToCSV(string path, bool reuseFrames = false)
         {
             const string CSVHeader = "SurveyType,WaterDepth,X,Y,GNSSAltitude,GNSSHeading,GNSSSpeed,MagneticHeading,MinRange,MaxRange,WaterTemperature,WaterSpeed,HardwareTime,Frequency,Milliseconds";
 
@@ -127,9 +195,10 @@ namespace SL3Reader
 
         public void ExportSideScans(string path)
         {
+            const int width = 2800;
             FrameList sideScanFrames = SideScanFrames;
             int frameCount = sideScanFrames.Count;
-            const int width = 2800;
+
             // TODO: create slicer!
             byte[] buffer = BitmapHelper.CreateBuffer(frameCount, width);
             BitmapHelper.UpdateBuffer(buffer, frameCount, width,
