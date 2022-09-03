@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace SL3Reader
 {
     [StructLayout(LayoutKind.Sequential, Size = Size)]
-    public readonly struct ThreeDimensionalFrameHeader
+    public readonly ref struct ThreeDimensionalFrameHeader
     {
         public const int Size = 76;
 

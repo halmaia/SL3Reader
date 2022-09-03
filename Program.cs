@@ -17,22 +17,6 @@ namespace SL3Reader
             // Experiment:
             sl3reader.ExportSideScans(@"F:\SS");
 
-            // Experiment:
-//            System.Collections.Generic.IReadOnlyList<Frame> frames = sl3reader.Frames;
-//            Frame frame = frames[31];
-//            sl3reader.Seek(Frame.Size + frame.PositionOfFirstByte, SeekOrigin.Begin);
-//            var remainingLen = frame.TotalLength - frame.OriginalLengthOfEchoData;
-
-//            var _3DBytes = new byte[ThreeDimensionalFrameHeader.Size];
-//fixed( byte* p = _3DBytes)
-//            {
-//                var spn = new Span<byte>(p, ThreeDimensionalFrameHeader.Size);
-//                sl3reader.Read(spn);
-//                var header = *(ThreeDimensionalFrameHeader*)p;
-
-//            }
-
-            //
             sl3reader.ExportToCSV(output = Path.GetFullPath(args[1]), false);
         }
     }

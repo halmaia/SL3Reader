@@ -4,12 +4,12 @@ namespace SL3Reader
 {
     public static class BitmapHelper
     {
-        public const int BitmapHeaderSize =
+        public const int BitmapCombinedHeaderSize =
                             BitmapFileHeader.Size +
                             BitmapInfoHeader.Size +
-                            256 * Bgra.Size;
+                            256 * Bgra.Size; // 1078.
 
-        private static readonly byte[] basicImageBuffer = new byte[BitmapHeaderSize]
+        private static readonly byte[] basicImageBuffer = new byte[BitmapCombinedHeaderSize]
 
         {
             0,0,0,0,0,0,0,0,0,0,
@@ -20,7 +20,7 @@ namespace SL3Reader
             0,0,0,0,0,0,0,0,0,0,
             0,0,0,0,0,0,0,0,0,0, /* BitmapInfoHeader part, */
 
-            27,27,27,0,
+            27,27,27,0, /* 1st color */
             37,37,47,0,
             39,39,53,0,
             37,38,57,0,
@@ -282,9 +282,9 @@ namespace SL3Reader
         {
             // (maxHeight * (maxWidth + (4 - maxWidth % 4))));
             byte[] buffer = GC.AllocateUninitializedArray<byte>(
-                BitmapHeaderSize +
+                BitmapCombinedHeaderSize +
                 maxHeight * maxWidth);
-            Buffer.BlockCopy(basicImageBuffer, 0, buffer, 0, BitmapHeaderSize);
+            Buffer.BlockCopy(basicImageBuffer, 0, buffer, 0, BitmapCombinedHeaderSize);
             return buffer;
         }
 
@@ -305,7 +305,7 @@ namespace SL3Reader
                 *(BitmapInfoHeader*)(pBuffer + BitmapFileHeader.Size) = new(width, height);
             }
             imageFile = new Span<byte>(buffer, 0, fileSize);
-            pixelData = imageFile[BitmapHeaderSize..];
+            pixelData = imageFile[BitmapCombinedHeaderSize..];
         }
     }
 }

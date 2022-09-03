@@ -8,6 +8,8 @@
     <ApplicationIcon />
     <StartupObject>SL3Reader.Program</StartupObject>
     <AnalysisLevel>preview</AnalysisLevel>
+    <Nullable>enable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">

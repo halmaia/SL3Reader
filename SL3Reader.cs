@@ -18,34 +18,29 @@ namespace SL3Reader
         IReadOnlyCollection<IFrame>
     {
         private List<IFrame> frames;
-        public IReadOnlyList<IFrame> Frames
-        {
-            get
-            {
-                frames ??= CreateNewFrameList(this);
-                return frames;
-            }
-        }
+        public IReadOnlyList<IFrame> Frames => frames ??= CreateNewFrameList(this);
 
-        #region Image Export
+        #region Indices
         private FrameList sideScanFrames,
             downScanFrames,
             primaryScanFrames,
             secondaryScanFrames,
-            unknown7ScanFrames;
+            unknown7ScanFrames,
+            unknown8ScanFrames,
+            threeDimensionalFrames;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void EnsureScanIndicesAvaliability()
+        private void EnsureIndexAvaliability()
         {
             if (sideScanFrames is null)
-                PopulateImageIndices();
+                PopulateIndices();
         }
         private FrameList SideScanFrames
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                EnsureScanIndicesAvaliability();
+                EnsureIndexAvaliability();
                 return sideScanFrames;
             }
         }
@@ -55,7 +50,7 @@ namespace SL3Reader
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                EnsureScanIndicesAvaliability();
+                EnsureIndexAvaliability();
                 return downScanFrames;
             }
         }
@@ -65,7 +60,7 @@ namespace SL3Reader
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                EnsureScanIndicesAvaliability();
+                EnsureIndexAvaliability();
                 return primaryScanFrames;
             }
         }
@@ -75,7 +70,7 @@ namespace SL3Reader
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                EnsureScanIndicesAvaliability();
+                EnsureIndexAvaliability();
                 return secondaryScanFrames;
             }
         }
@@ -85,20 +80,42 @@ namespace SL3Reader
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                EnsureScanIndicesAvaliability();
+                EnsureIndexAvaliability();
                 return unknown7ScanFrames;
             }
         }
 
-        private void PopulateImageIndices()
+        private FrameList Unknown8ScanFrames
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                EnsureIndexAvaliability();
+                return unknown8ScanFrames;
+            }
+        }
+
+        private FrameList ThreeDimensionalFrames
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                EnsureIndexAvaliability();
+                return threeDimensionalFrames;
+            }
+        }
+
+        private void PopulateIndices()
         {
             IReadOnlyList<IFrame> localFrames = Frames;
             int localCount = localFrames.Count;
-            FrameList sideScans = new(localFrames),
-                      downScans = new(localFrames),
-                      primaryScans = new(localFrames),
-                      secondaryScans = new(localFrames),
-                      unknown7Scans = new(localFrames);
+            FrameList sideScans = new(localCount / 10, localFrames),
+                      downScans = new(localCount / 10, localFrames),
+                      primaryScans = new(localCount / 8, localFrames),
+                      secondaryScans = new(localCount / 8, localFrames),
+                      unknown7Scans = new(localCount / 4, localFrames),
+                      unknown8Scans = new(localCount / 10, localFrames), // TODO: Revise counts!
+                      threeDimensionals = new(localCount / 10, localFrames);
 
 
             for (int i = 0; i < localCount; i++)
@@ -121,6 +138,10 @@ namespace SL3Reader
                         { secondaryScans.Add(i); break; }
                     case SurveyType.Unknown7:
                         { unknown7Scans.Add(i); break; }
+                    case SurveyType.Unknown8:
+                        { unknown8Scans.Add(i); break; }
+                    case SurveyType.ThreeDimensional:
+                        { threeDimensionals.Add(i); break; }
                 }
             }
             sideScanFrames = sideScans;
@@ -128,8 +149,9 @@ namespace SL3Reader
             primaryScanFrames = primaryScans;
             secondaryScanFrames = secondaryScans;
             unknown7ScanFrames = unknown7Scans;
+            
         }
-        #endregion Image Export
+        #endregion Indices
 
         public int Count => Frames.Count; // Can't be readonly hence the Frames could be initialized.
 
@@ -250,6 +272,10 @@ namespace SL3Reader
                 stream.Write(fullBuffer);
                 stream.Close();
             }
+        }
+
+        public void Export3D(string directory)
+        {
 
         }
 
