@@ -114,7 +114,7 @@ namespace SL3Reader
                       primaryScans = new(localCount / 8, localFrames),
                       secondaryScans = new(localCount / 8, localFrames),
                       unknown7Scans = new(localCount / 4, localFrames),
-                      unknown8Scans = new(localCount / 10, localFrames), // TODO: Revise counts!
+                      unknown8Scans = new(localCount / 4, localFrames),
                       threeDimensionals = new(localCount / 10, localFrames);
 
 
@@ -125,23 +125,23 @@ namespace SL3Reader
                     case SurveyType.SideScan:
                         {
                             sideScans.Add(i);
-                            break;
+                            continue;
                         }
                     case SurveyType.DownScan:
                         {
                             downScans.Add(i);
-                            break;
+                            continue;
                         }
                     case SurveyType.Primary:
-                        { primaryScans.Add(i); break; }
+                        { primaryScans.Add(i); continue; }
                     case SurveyType.Secondary:
-                        { secondaryScans.Add(i); break; }
+                        { secondaryScans.Add(i); continue; }
                     case SurveyType.Unknown7:
-                        { unknown7Scans.Add(i); break; }
+                        { unknown7Scans.Add(i); continue; }
                     case SurveyType.Unknown8:
-                        { unknown8Scans.Add(i); break; }
+                        { unknown8Scans.Add(i); continue; }
                     case SurveyType.ThreeDimensional:
-                        { threeDimensionals.Add(i); break; }
+                        { threeDimensionals.Add(i); continue; }
                 }
             }
             sideScanFrames = sideScans;
@@ -149,7 +149,8 @@ namespace SL3Reader
             primaryScanFrames = primaryScans;
             secondaryScanFrames = secondaryScans;
             unknown7ScanFrames = unknown7Scans;
-            
+            unknown8ScanFrames = unknown8Scans;
+            threeDimensionalFrames = threeDimensionals;
         }
         #endregion Indices
 
@@ -242,7 +243,7 @@ namespace SL3Reader
                     currentHeiht = 0;
                     continue;
                 }
-                
+
             }
             if (currentHeiht > maxHeight)
                 maxHeight = currentHeiht;
@@ -268,16 +269,38 @@ namespace SL3Reader
 
                     ReadExactly(dataBuffer.Slice(k++ * fullStride, width));
                 }
-                using FileStream stream = File.OpenWrite(Path.Combine(dir.FullName,$"SS_{breakpoint}.bmp"));
+                using FileStream stream = File.OpenWrite(Path.Combine(dir.FullName, $"SS_{breakpoint}.bmp"));
                 stream.Write(fullBuffer);
                 stream.Close();
             }
         }
 
-        public void Export3D(string directory)
-        {
+        //public void ExportInterfereometricDataset(string directory)
+        //{
+        //    FrameList localFrames = Unknown8ScanFrames;
+        //    int length = localFrames.Count;
 
-        }
+        //    for (int i = 0; i < length - 1; i++)
+        //    {
+        //        BasicFrame FirstFrame = (BasicFrame)localFrames[i];
+        //        Seek(FirstFrame.DataOffset, SeekOrigin.Begin);
+        //        Span<ushort> First = (new ushort[512/2]).AsSpan();
+        //        ReadExactly(System.Runtime.InteropServices.MemoryMarshal.AsBytes(First));
+
+
+        //        BasicFrame SecondFrame = (BasicFrame)localFrames[i + 1];
+        //        Seek(SecondFrame.DataOffset, SeekOrigin.Begin);
+        //        Span<float> Second = (new float[512/4]).AsSpan();
+        //        ReadExactly(System.Runtime.InteropServices.MemoryMarshal.AsBytes(Second));
+
+        //        for (int j = 0; j < 512/4; j += 1)
+        //        {
+        //            System.Numerics.Complex complex = new(First[j], Second[j]);
+        //            Debug.Print((complex.Phase * (360 / double.Tau)).ToString());
+        //        }
+
+        //    }
+        //}
 
         #region Enumerator support
         IEnumerator<IFrame> IEnumerable<IFrame>.GetEnumerator() =>

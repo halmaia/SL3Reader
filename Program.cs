@@ -15,7 +15,8 @@ namespace SL3Reader
             }
             using SL3Reader sl3reader = new(input);
             // Experiment:
-            sl3reader.ExportSideScans(@"F:\SS");
+            //sl3reader.ExportSideScans(@"F:\SS");
+            //sl3reader.ExportInterfereometricDataset(@"F:\SS");
 
             sl3reader.ExportToCSV(output = Path.GetFullPath(args[1]), false);
         }
