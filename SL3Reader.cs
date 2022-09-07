@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -17,8 +18,24 @@ namespace SL3Reader
         IReadOnlyList<IFrame>,
         IReadOnlyCollection<IFrame>
     {
+        #region Frame support
         private List<IFrame> frames;
         public IReadOnlyList<IFrame> Frames => frames ??= CreateNewFrameList(this);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private List<IFrame> CreateNewFrameList()
+        {
+            const long averageFrameSize = 2118L; // Empirically set value to avoid frequent resize of the underlying array.
+            return new((int)(Length / averageFrameSize));
+        }
+
+        private List<IFrame> CreateNewFrameList(IEnumerable<IFrame> enumerable)
+        {
+            List<IFrame> list = CreateNewFrameList();
+            list.AddRange(enumerable);
+            return list;
+        }
+        #endregion Frame support
 
         #region Indices
         private FrameList sideScanFrames,
@@ -169,20 +186,6 @@ namespace SL3Reader
                 throw new InvalidDataException("Unsupported file type. Expected type SL3.");
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private List<IFrame> CreateNewFrameList()
-        {
-            const long averageFrameSize = 2118L; // Empirically set value to avoid frequent resize of the underlying array.
-            return new((int)(Length / averageFrameSize));
-        }
-
-        private List<IFrame> CreateNewFrameList(IEnumerable<IFrame> enumerable)
-        {
-            List<IFrame> list = CreateNewFrameList();
-            list.AddRange(enumerable);
-            return list;
-        }
-
         public unsafe void ExportToCSV(string path, bool reuseFrames = false)
         {
             const string CSVHeader = "SurveyType,WaterDepth,X,Y,GNSSAltitude,GNSSHeading,GNSSSpeed,MagneticHeading,MinRange,MaxRange,WaterTemperature,WaterSpeed,HardwareTime,Frequency,Milliseconds";
@@ -302,6 +305,29 @@ namespace SL3Reader
         //    }
         //}
 
+        public unsafe void Export3D(string path)
+        {
+            FrameList localFrames = ThreeDimensionalFrames;
+            int length = localFrames.Count;
+
+            ThreeDimensionalFrameHeader* header = stackalloc ThreeDimensionalFrameHeader[1];
+            F3DMeasuement* measurements = stackalloc F3DMeasuement[400];
+
+            for (int i = 0; i < length; i++)
+            {
+                IFrame _3DFrame = (ExtendedFrame)localFrames[i];
+                Seek(_3DFrame.DataOffset, SeekOrigin.Begin);
+                ReadExactly(new(header, ThreeDimensionalFrameHeader.Size));
+                ReadExactly(new(measurements, header->NumberOfLeftBytes));
+                var limit = measurements + (header->NumberOfLeftBytes / F3DMeasuement.Size);
+                for (F3DMeasuement* measurement = measurements; measurement < limit; measurement++)
+                {
+                    Debug.Print(measurement->ToString());
+                }
+            }
+
+        }
+
         #region Enumerator support
         IEnumerator<IFrame> IEnumerable<IFrame>.GetEnumerator() =>
             frames is not null ? frames.GetEnumerator() : new Enumerator(this);
@@ -347,7 +373,7 @@ namespace SL3Reader
                 if (source.Read(new(pCurrent, ExtendedFrame.Size)) != ExtendedFrame.Size)
                     throw new IOException("Unable to read. It could be due to EOF or IO error.");
                 // No need to read the whole frame: will be checked at IEnumerator.MoveNext().
-
+                BasicFrame.InitTimestampBase(pCurrent->HardwareTime);
                 ExtendedFrame.InitTimestampBase(pCurrent->HardwareTime);
             }
 

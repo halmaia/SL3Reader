@@ -8,25 +8,37 @@ namespace SL3Reader
     {
         public const int Size = 76;
 
-        public int HeaderSize { get; }
-        public int NumberOfLeftBytes { get; }
-        public int NumberOfRightBytes { get; }
-        public int NumberOfUnreliableBytes { get; }
-        public int NumberOfUnreliableRightBytes { get; }
-        public int NumberOfUnreliableLeftBytes { get; }
-        public int UnknownAt24 { get; }
-        public int UnknownAt28 { get; }
-        public int UnknownAt32 { get; }
-        public int UnknownAt36 { get; }
-        public int UnknownAt40 { get; }
-        public int UnknownAt44 { get; }
-        public int UnknownAt48 { get; }
-        public int UnknownAt52 { get; }
-        public int UnknownAt56 { get; }
-        public int UnknownAt60 { get; }
-        public int UnknownAt64 { get; }
-        public int UnknownAt68 { get; }
-        public int UnknownAt72 { get; }
+        public readonly int HeaderSize { get; }
+        public readonly int NumberOfLeftBytes { get; }
+        public readonly int NumberOfRightBytes { get; }
+        public readonly int NumberOfUnreliableBytes { get; }
+        public readonly int NumberOfUnreliableRightBytes { get; }
+        public readonly int NumberOfUnreliableLeftBytes { get; }
+        public readonly int UnknownAt24 { get; }
+        public readonly int UnknownAt28 { get; }
+        public readonly int UnknownAt32 { get; }
+        public readonly int UnknownAt36 { get; }
+        public readonly int UnknownAt40 { get; }
+        public readonly int UnknownAt44 { get; }
+        public readonly int UnknownAt48 { get; }
+        public readonly int UnknownAt52 { get; }
+        public readonly int UnknownAt56 { get; }
+        public readonly int UnknownAt60 { get; }
+        public readonly int UnknownAt64 { get; }
+        public readonly int UnknownAt68 { get; }
+        public readonly int UnknownAt72 { get; }
+
+    }
+
+    [StructLayout(LayoutKind.Sequential, Size = Size)]
+    public readonly ref struct F3DMeasuement
+    {
+        public const int Size = 2*sizeof(float);
+
+        public readonly float Distance { get; }
+        public readonly float Depth { get; }
+
+        public override readonly string ToString() => $"{Distance};{Depth}";
 
     }
 }
