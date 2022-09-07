@@ -31,14 +31,14 @@ namespace SL3Reader
     }
 
     [StructLayout(LayoutKind.Sequential, Size = Size)]
-    public readonly ref struct F3DMeasuement
+    public readonly ref struct InterferometricMeasuement
     {
-        public const int Size = 2*sizeof(float);
+        public const int Size = 2 * sizeof(float);
 
-        public readonly float Distance { get; }
+        public readonly float Delta { get; }
         public readonly float Depth { get; }
 
-        public override readonly string ToString() => $"{Distance};{Depth}";
+        public override readonly string ToString() => $"{Delta};{Depth}";
 
     }
 }

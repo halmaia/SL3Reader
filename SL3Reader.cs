@@ -311,7 +311,7 @@ namespace SL3Reader
             int length = localFrames.Count;
 
             ThreeDimensionalFrameHeader* header = stackalloc ThreeDimensionalFrameHeader[1];
-            F3DMeasuement* measurements = stackalloc F3DMeasuement[400];
+            InterferometricMeasuement* measurements = stackalloc InterferometricMeasuement[400];
 
             for (int i = 0; i < length; i++)
             {
@@ -319,8 +319,8 @@ namespace SL3Reader
                 Seek(_3DFrame.DataOffset, SeekOrigin.Begin);
                 ReadExactly(new(header, ThreeDimensionalFrameHeader.Size));
                 ReadExactly(new(measurements, header->NumberOfLeftBytes));
-                var limit = measurements + (header->NumberOfLeftBytes / F3DMeasuement.Size);
-                for (F3DMeasuement* measurement = measurements; measurement < limit; measurement++)
+                var limit = measurements + (header->NumberOfLeftBytes / InterferometricMeasuement.Size);
+                for (InterferometricMeasuement* measurement = measurements; measurement < limit; measurement++)
                 {
                     Debug.Print(measurement->ToString());
                 }
