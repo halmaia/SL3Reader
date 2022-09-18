@@ -188,7 +188,7 @@ namespace SL3Reader
 
         public unsafe void ExportToCSV(string path, bool reuseFrames = false)
         {
-            const string CSVHeader = "SurveyType,WaterDepth,X,Y,GNSSAltitude,GNSSHeading,GNSSSpeed,MagneticHeading,MinRange,MaxRange,WaterTemperature,WaterSpeed,HardwareTime,Frequency,Milliseconds";
+            const string CSVHeader = "SurveyType,WaterDepth,Longitude,Lattitude,GNSSAltitude,GNSSHeading,GNSSSpeed,MagneticHeading,MinRange,MaxRange,WaterTemperature,WaterSpeed,HardwareTime,Frequency,Milliseconds";
 
             using StreamWriter streamWriter = File.CreateText(path);
             streamWriter.WriteLine(CSVHeader);
@@ -200,7 +200,7 @@ namespace SL3Reader
 
                 foreach (IFrame frame in this)
                 {
-                    streamWriter.WriteLine(frame.ToString()); // Write & WriteLine calling the same
+                    streamWriter.WriteLine(frame.ToString()); // Write & WriteLine call the same
                     //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
                     // so ading the '\n' manually has no effect just causing platform dependent issues. 
                     localFrames.Add(frame);
@@ -210,7 +210,7 @@ namespace SL3Reader
             {
                 foreach (IFrame frame in this)
                 {
-                    // Write & WriteLine calling the same
+                    // Write & WriteLine call the same
                     //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
                     // so ading the '\n' manually has no effect just causing platform dependent issues. 
                     streamWriter.WriteLine(frame.ToString());
@@ -315,7 +315,7 @@ namespace SL3Reader
 
             for (int i = 0; i < length; i++)
             {
-                IFrame _3DFrame = (ExtendedFrame)localFrames[i];
+                IFrame _3DFrame = (Frame)localFrames[i];
                 Seek(_3DFrame.DataOffset, SeekOrigin.Begin);
                 ReadExactly(new(header, ThreeDimensionalFrameHeader.Size));
                 ReadExactly(new(measurements, header->NumberOfLeftBytes));
@@ -325,30 +325,22 @@ namespace SL3Reader
                     Debug.Print(measurement->ToString());
                 }
             }
-
         }
 
         #region Enumerator support
         IEnumerator<IFrame> IEnumerable<IFrame>.GetEnumerator() =>
-            frames is not null ? frames.GetEnumerator() : new Enumerator(this);
+            frames is null ? new Enumerator(this) : frames.GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() =>
-            frames is not null ? frames.GetEnumerator() : new Enumerator(this);
+            frames is null ? new Enumerator(this) : frames.GetEnumerator();
         public readonly struct Enumerator : IEnumerator<IFrame>, IEnumerator
         {
             private readonly SL3Reader source;
-            private unsafe readonly ExtendedFrame* pCurrent;
+            private readonly unsafe Frame* pCurrent;
             private readonly long fileLength;
-            readonly unsafe IFrame IEnumerator<IFrame>.Current => GetCurrentFrame();
-            readonly unsafe object IEnumerator.Current => GetCurrentFrame();
+            readonly unsafe IFrame IEnumerator<IFrame>.Current => *pCurrent;
+            readonly unsafe object IEnumerator.Current => *pCurrent;
 
-            private readonly unsafe IFrame GetCurrentFrame()
-            {
-                ExtendedFrame* frame = pCurrent;
-                return frame->SurveyType is SurveyType.Unknown7 or SurveyType.Unknown8
-                    ? *(BasicFrame*)pCurrent
-                    : *frame;
-            }
             public unsafe Enumerator(SL3Reader source)
             {
                 bool lockTaken = false;
@@ -359,7 +351,7 @@ namespace SL3Reader
                 this.source = source;
                 fileLength = source.Length;
 
-                pCurrent = (ExtendedFrame*)AlignedAlloc(ExtendedFrame.Size, (nuint)nuint.Size);
+                pCurrent = (Frame*)AlignedAlloc(Frame.ExtendedSize, (nuint)nuint.Size);
 
                 // The state of the source is unknown, so we have to reset the stream.
                 Reset();
@@ -370,20 +362,19 @@ namespace SL3Reader
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             private unsafe void InitTimestamp()
             {
-                if (source.Read(new(pCurrent, ExtendedFrame.Size)) != ExtendedFrame.Size)
+                if (source.Read(new(pCurrent, Frame.ExtendedSize)) != Frame.ExtendedSize)
                     throw new IOException("Unable to read. It could be due to EOF or IO error.");
                 // No need to read the whole frame: will be checked at IEnumerator.MoveNext().
-                BasicFrame.InitTimestampBase(pCurrent->HardwareTime);
-                ExtendedFrame.InitTimestampBase(pCurrent->HardwareTime);
+                Frame.InitTimestampBase(pCurrent->HardwareTime);
             }
 
             unsafe bool IEnumerator.MoveNext()
             {
                 SL3Reader stream = source;
-                ExtendedFrame* currentFrame = pCurrent;
+                Frame* currentFrame = pCurrent;
 
-                return stream.Read(new(currentFrame, ExtendedFrame.Size)) == ExtendedFrame.Size && // If false: unable to read. It could be due to EOF or IO error.
-                       stream.Seek(currentFrame->TotalLength - ExtendedFrame.Size, SeekOrigin.Current) < fileLength; // If false: Avoid returning non-complete frame.
+                return stream.Read(new(currentFrame, Frame.ExtendedSize)) == Frame.ExtendedSize && // If false: unable to read. It could be due to EOF or IO error.
+                       stream.Seek(currentFrame->LengthOfFrame - Frame.ExtendedSize, SeekOrigin.Current) < fileLength; // If false: Avoid returning non-complete frame.
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
