@@ -17,7 +17,7 @@ namespace SL3Reader
         ushort PreviousFrameLength { get; }
         SurveyType SurveyType { get; }
         short UnknownAt14 { get; }
-        uint NumberOfCampaignInThisType { get; }
+        uint CampaignID { get; }
         float MinRange { get; }
         float MaxRange { get; }
         float UnknownAt28 { get; }
@@ -79,6 +79,7 @@ namespace SL3Reader
     {
         public const int ExtendedSize = 168;
         public const int BasicSize = 128;
+        public const int MinimumInitSize = 44;
 
         #region Basic Properties
         [field: FieldOffset(0)] public readonly uint PositionOfFirstByte { get; } // (0)
@@ -86,18 +87,10 @@ namespace SL3Reader
         [field: FieldOffset(8)] public readonly ushort LengthOfFrame { get; } // (8)
         [field: FieldOffset(10)] public readonly ushort PreviousFrameLength { get; } // (10)
         [field: FieldOffset(12)] public readonly SurveyType SurveyType { get; } // (12)
-        [field: FieldOffset(14)] public readonly short UnknownAt14 { get; } // (14)
-        [field: FieldOffset(16)] public readonly uint NumberOfCampaignInThisType { get; } // (16)
+        [field: FieldOffset(14)] public readonly short UnknownAt14 { get; } // (14) Always 0 for me.
+        [field: FieldOffset(16)] public readonly uint CampaignID { get; } // (16)
         [field: FieldOffset(20)] public readonly float MinRange { get; } // (20)
         [field: FieldOffset(24)] public readonly float MaxRange { get; } // (24)
-
-        // Experiment
-        [field: FieldOffset(28)] public readonly ushort _HeaderSize { get; } // (28)
-        [field: FieldOffset(30)] public readonly ushort _PreviousHeaderSize { get; } // (28)
-        [field: FieldOffset(32)] public readonly ushort _ChannelType { get; } // (28)
-        [field: FieldOffset(64)] public readonly float _WaterDepth2 { get; } // (28)
-        [field: FieldOffset(68)] public readonly float _KeelDepth { get; } // (28)
-        // END Experiment
         [field: FieldOffset(28)] public readonly float UnknownAt28 { get; } // (28)
         [field: FieldOffset(32)] public readonly float UnknownAt32 { get; } // (32)
         [field: FieldOffset(36)] public readonly float UnknownAt36 { get; } // (36)
@@ -110,7 +103,6 @@ namespace SL3Reader
         [field: FieldOffset(54)] public readonly float UnknownAt54 { get; } // (54)
         [field: FieldOffset(58)] public readonly float UnknownAt58 { get; } // (58)
         [field: FieldOffset(62)] public readonly short UnknownAt62 { get; } // (62)
-
         [field: FieldOffset(64)] public readonly float UnknownAt64 { get; } // (64)
         [field: FieldOffset(68)] public readonly float UnknownAt68 { get; } // (68)
         [field: FieldOffset(72)] public readonly float UnknownAt72 { get; } // (72)

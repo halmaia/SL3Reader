@@ -1,25 +1,34 @@
 ﻿using System;
-using System.IO;
+using static System.IO.Path;
 
 namespace SL3Reader
 {
     public static class Program
     {
-        public static unsafe void Main(string[] args)
+        public static void Main(string[] args)
         {
-            string input, output;
-            if (args.Length != 2 || !File.Exists(input = Path.GetFullPath(args[0])))
+            if (args.Length != 2)
             {
                 Console.WriteLine(@"Usage example: SL3Reader.exe C:\input.sl3 D:\output.csv");
                 return;
             }
-            using SL3Reader sl3reader = new(input);
-            // Experiment:
-            //sl3reader.ExportSideScans(@"F:\SS");
-            //sl3reader.ExportInterfereometricDataset(@"F:\SS");
-            //sl3reader.Export3D("X");
 
-            sl3reader.ExportToCSV(output = Path.GetFullPath(args[1]), false);
+            string input = GetFullPath(args[0]);
+            if(!Exists(input))
+            {
+                Console.WriteLine("Input file not found!");
+                return;
+            }
+
+            string output = GetFullPath(args[1]);
+            if (!Exists(GetDirectoryName(output)))
+            {
+                Console.WriteLine("Directory not found for the output file!");
+                return;
+            }
+
+            using SL3Reader sl3reader = new(input);
+            sl3reader.ExportToCSV(output, true);
         }
     }
 }

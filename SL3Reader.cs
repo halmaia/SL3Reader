@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -29,156 +30,58 @@ namespace SL3Reader
             return new((int)(Length / averageFrameSize));
         }
 
-        private List<IFrame> CreateNewFrameList(IEnumerable<IFrame> enumerable)
+        private List<IFrame> CreateNewFrameList(IEnumerable<IFrame> collection)
         {
             List<IFrame> list = CreateNewFrameList();
-            list.AddRange(enumerable);
+            InitIndexSupport(list.Capacity);
+            var index = indexByType;
+            foreach (IFrame frame in collection)
+            {
+                list.Add(frame);
+                index[frame.SurveyType].Add(frame);
+            }
             return list;
         }
-        #endregion Frame support
-
-        #region Indices
-        private FrameList sideScanFrames,
-            downScanFrames,
-            primaryScanFrames,
-            secondaryScanFrames,
-            unknown7ScanFrames,
-            unknown8ScanFrames,
-            threeDimensionalFrames;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void EnsureIndexAvaliability()
-        {
-            if (sideScanFrames is null)
-                PopulateIndices();
-        }
-        private FrameList SideScanFrames
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get
-            {
-                EnsureIndexAvaliability();
-                return sideScanFrames;
-            }
-        }
-
-        private FrameList DownScanFrames
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get
-            {
-                EnsureIndexAvaliability();
-                return downScanFrames;
-            }
-        }
-
-        private FrameList PrimaryScanFrames
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get
-            {
-                EnsureIndexAvaliability();
-                return primaryScanFrames;
-            }
-        }
-
-        private FrameList SecondaryScanFrames
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get
-            {
-                EnsureIndexAvaliability();
-                return secondaryScanFrames;
-            }
-        }
-
-        private FrameList Unknown7ScanFrames
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get
-            {
-                EnsureIndexAvaliability();
-                return unknown7ScanFrames;
-            }
-        }
-
-        private FrameList Unknown8ScanFrames
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get
-            {
-                EnsureIndexAvaliability();
-                return unknown8ScanFrames;
-            }
-        }
-
-        private FrameList ThreeDimensionalFrames
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get
-            {
-                EnsureIndexAvaliability();
-                return threeDimensionalFrames;
-            }
-        }
-
-        private void PopulateIndices()
-        {
-            IReadOnlyList<IFrame> localFrames = Frames;
-            int localCount = localFrames.Count;
-            FrameList sideScans = new(localCount / 10, localFrames),
-                      downScans = new(localCount / 10, localFrames),
-                      primaryScans = new(localCount / 8, localFrames),
-                      secondaryScans = new(localCount / 8, localFrames),
-                      unknown7Scans = new(localCount / 4, localFrames),
-                      unknown8Scans = new(localCount / 4, localFrames),
-                      threeDimensionals = new(localCount / 10, localFrames);
-
-
-            for (int i = 0; i < localCount; i++)
-            {
-                switch (localFrames[i].SurveyType)
-                {
-                    case SurveyType.SideScan:
-                        {
-                            sideScans.Add(i);
-                            continue;
-                        }
-                    case SurveyType.DownScan:
-                        {
-                            downScans.Add(i);
-                            continue;
-                        }
-                    case SurveyType.Primary:
-                        { primaryScans.Add(i); continue; }
-                    case SurveyType.Secondary:
-                        { secondaryScans.Add(i); continue; }
-                    case SurveyType.Unknown7:
-                        { unknown7Scans.Add(i); continue; }
-                    case SurveyType.Unknown8:
-                        { unknown8Scans.Add(i); continue; }
-                    case SurveyType.ThreeDimensional:
-                        { threeDimensionals.Add(i); continue; }
-                }
-            }
-            sideScanFrames = sideScans;
-            downScanFrames = downScans;
-            primaryScanFrames = primaryScans;
-            secondaryScanFrames = secondaryScans;
-            unknown7ScanFrames = unknown7Scans;
-            unknown8ScanFrames = unknown8Scans;
-            threeDimensionalFrames = threeDimensionals;
-        }
-        #endregion Indices
 
         public int Count => Frames.Count; // Can't be readonly hence the Frames could be initialized.
 
         public IFrame this[int index] => Frames[index]; // Can't be readonly hence the Frames could be initialized.
 
+        #endregion Frame support
+
+        #region Indices
+        private SortedDictionary<SurveyType, List<IFrame>> indexByType;
+        private SortedDictionary<uint, List<IFrame>> indexByCampaign;
+        public SortedDictionary<SurveyType, List<IFrame>> IndexByType => indexByType;
+        public SortedDictionary<uint, List<IFrame>> IndexbyCamaign => indexByCampaign;
+        private void InitIndexSupport(int estimatedCount)
+        {
+            indexByType = new()
+            {
+                { SurveyType.Primary, new(estimatedCount / 8) },
+                { SurveyType.Secondary, new(estimatedCount / 8) },
+                {SurveyType.DownScan, new(estimatedCount / 10) },
+                {SurveyType.LeftSidescan,new() },
+                { SurveyType. RightSidescan, new() },
+                { SurveyType.SideScan, new(estimatedCount / 10) },
+                { SurveyType.Unknown6,new() },
+                { SurveyType.Unknown7, new(estimatedCount / 4) },
+                { SurveyType.Unknown8, new(estimatedCount / 4) },
+                { SurveyType.ThreeDimensional, new(estimatedCount / 10) },
+                { SurveyType.DebugDigital, new() },
+                { SurveyType.DebugNoise,new() }
+            };
+            indexByCampaign = new();
+        }
+        #endregion Indices
+
         public unsafe SL3Reader(string path) :
            base(path, FileMode.Open, FileAccess.Read,
            FileShare.Read, 4096, FileOptions.RandomAccess)
         {
+            if (Length < (SLFileHeader.Size + Frame.MinimumInitSize))
+                throw new EndOfStreamException("The file is too short to be valid.");
+
             SLFileHeader* pFileHeader = stackalloc SLFileHeader[1];
             ReadExactly(new(pFileHeader, SLFileHeader.Size));
 
@@ -197,6 +100,9 @@ namespace SL3Reader
             {
                 List<IFrame> localFrames = CreateNewFrameList();
                 frames = localFrames;
+                InitIndexSupport(frames.Capacity);
+                SortedDictionary<SurveyType, List<IFrame>> typeIndex = indexByType;
+                SortedDictionary<uint, List<IFrame>> camapignIndex = indexByCampaign;
 
                 foreach (IFrame frame in this)
                 {
@@ -204,6 +110,11 @@ namespace SL3Reader
                     //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
                     // so ading the '\n' manually has no effect just causing platform dependent issues. 
                     localFrames.Add(frame);
+                    typeIndex[frame.SurveyType].Add(frame);
+                    if(camapignIndex.TryGetValue(frame.CampaignID, out List<IFrame>  camapignList))
+                        camapignList.Add(frame);
+                    else
+                        camapignIndex.Add(frame.CampaignID, new List<IFrame>(9) { frame });
                 }
             }
             else
@@ -225,7 +136,7 @@ namespace SL3Reader
             dir.Create();
 
             const int width = 2800;
-            FrameList sideScanFrames = SideScanFrames;
+            List<IFrame> sideScanFrames = IndexByType[SurveyType.SideScan];
             int frameCount = sideScanFrames.Count;
             if (frameCount < 1) return;
             int maxHeight = 1, currentHeiht = 0;
@@ -307,7 +218,7 @@ namespace SL3Reader
 
         public unsafe void Export3D(string path)
         {
-            FrameList localFrames = ThreeDimensionalFrames;
+            List<IFrame> localFrames = IndexByType[SurveyType.ThreeDimensional];
             int length = localFrames.Count;
 
             ThreeDimensionalFrameHeader* header = stackalloc ThreeDimensionalFrameHeader[1];
@@ -328,11 +239,15 @@ namespace SL3Reader
         }
 
         #region Enumerator support
-        IEnumerator<IFrame> IEnumerable<IFrame>.GetEnumerator() =>
-            frames is null ? new Enumerator(this) : frames.GetEnumerator();
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private IEnumerator<IFrame> GetSL3Enumerator() =>
+            frames is null || frames.Count == 0 ? new SL3Reader.Enumerator(this) : frames.GetEnumerator();
 
-        IEnumerator IEnumerable.GetEnumerator() =>
-            frames is null ? new Enumerator(this) : frames.GetEnumerator();
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        IEnumerator<IFrame> IEnumerable<IFrame>.GetEnumerator() => GetSL3Enumerator();
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        IEnumerator IEnumerable.GetEnumerator() => GetSL3Enumerator();
         public readonly struct Enumerator : IEnumerator<IFrame>, IEnumerator
         {
             private readonly SL3Reader source;
@@ -351,7 +266,7 @@ namespace SL3Reader
                 this.source = source;
                 fileLength = source.Length;
 
-                pCurrent = (Frame*)AlignedAlloc(Frame.ExtendedSize, (nuint)nuint.Size);
+                pCurrent = (Frame*)AlignedAlloc(Frame.ExtendedSize, 8 * (nuint)nuint.Size);
 
                 // The state of the source is unknown, so we have to reset the stream.
                 Reset();
@@ -362,17 +277,17 @@ namespace SL3Reader
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             private unsafe void InitTimestamp()
             {
-                if (source.Read(new(pCurrent, Frame.ExtendedSize)) != Frame.ExtendedSize)
-                    throw new IOException("Unable to read. It could be due to EOF or IO error.");
-                // No need to read the whole frame: will be checked at IEnumerator.MoveNext().
+                source.ReadExactly(new(pCurrent, Frame.MinimumInitSize)); // We won't have to read the whole
+                // frame: just till the end of pCurrent->HardwareTime.
                 Frame.InitTimestampBase(pCurrent->HardwareTime);
             }
 
             unsafe bool IEnumerator.MoveNext()
             {
-                SL3Reader stream = source;
                 Frame* currentFrame = pCurrent;
+                SL3Reader stream = source;
 
+                // We read always the extended size!
                 return stream.Read(new(currentFrame, Frame.ExtendedSize)) == Frame.ExtendedSize && // If false: unable to read. It could be due to EOF or IO error.
                        stream.Seek(currentFrame->LengthOfFrame - Frame.ExtendedSize, SeekOrigin.Current) < fileLength; // If false: Avoid returning non-complete frame.
             }
