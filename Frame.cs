@@ -163,7 +163,6 @@ namespace SL3Reader
         #region WGS84
         private const double PolarRadius = 6356752.3142d; // Lowrance uses float causing truncated precision.
         private const double RadToDeg = 360d / double.Tau;
-        private const double HalfPi = double.Pi / 2;
         public double Longitude => X / PolarRadius * RadToDeg;
         public double Latitude => RadToDeg * double.Atan(double.Sinh(Y / PolarRadius));
         #endregion WGS84

@@ -7,6 +7,7 @@ using System.Drawing;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Threading.Channels;
 using static System.Runtime.InteropServices.NativeMemory;
 
 namespace SL3Reader
@@ -32,15 +33,21 @@ namespace SL3Reader
 
         private List<IFrame> CreateNewFrameList(IEnumerable<IFrame> collection)
         {
-            List<IFrame> list = CreateNewFrameList();
-            InitIndexSupport(list.Capacity);
-            var index = indexByType;
+            List<IFrame> localFrames = CreateNewFrameList();
+            InitIndexSupport(localFrames.Capacity);
+            SortedDictionary<SurveyType, List<IFrame>> typeIndex = indexByType;
+            SortedDictionary<uint, List<IFrame>> camapignIndex = indexByCampaign;
+
             foreach (IFrame frame in collection)
             {
-                list.Add(frame);
-                index[frame.SurveyType].Add(frame);
+                localFrames.Add(frame);
+                typeIndex[frame.SurveyType].Add(frame);
+                if (camapignIndex.TryGetValue(frame.CampaignID, out List<IFrame> camapignList))
+                    camapignList.Add(frame);
+                else
+                    camapignIndex.Add(frame.CampaignID, new List<IFrame>(9) { frame });
             }
-            return list;
+            return localFrames;
         }
 
         public int Count => Frames.Count; // Can't be readonly hence the Frames could be initialized.
@@ -53,15 +60,15 @@ namespace SL3Reader
         private SortedDictionary<SurveyType, List<IFrame>> indexByType;
         private SortedDictionary<uint, List<IFrame>> indexByCampaign;
         public SortedDictionary<SurveyType, List<IFrame>> IndexByType => indexByType;
-        public SortedDictionary<uint, List<IFrame>> IndexbyCamaign => indexByCampaign;
+        public SortedDictionary<uint, List<IFrame>> IndexByCampaign => indexByCampaign;
         private void InitIndexSupport(int estimatedCount)
         {
             indexByType = new()
             {
                 { SurveyType.Primary, new(estimatedCount / 8) },
                 { SurveyType.Secondary, new(estimatedCount / 8) },
-                {SurveyType.DownScan, new(estimatedCount / 10) },
-                {SurveyType.LeftSidescan,new() },
+                { SurveyType.DownScan, new(estimatedCount / 10) },
+                { SurveyType.LeftSidescan,new() },
                 { SurveyType. RightSidescan, new() },
                 { SurveyType.SideScan, new(estimatedCount / 10) },
                 { SurveyType.Unknown6,new() },
@@ -71,6 +78,7 @@ namespace SL3Reader
                 { SurveyType.DebugDigital, new() },
                 { SurveyType.DebugNoise,new() }
             };
+
             indexByCampaign = new();
         }
         #endregion Indices
@@ -98,23 +106,11 @@ namespace SL3Reader
 
             if (reuseFrames && frames is null)
             {
-                List<IFrame> localFrames = CreateNewFrameList();
-                frames = localFrames;
-                InitIndexSupport(frames.Capacity);
-                SortedDictionary<SurveyType, List<IFrame>> typeIndex = indexByType;
-                SortedDictionary<uint, List<IFrame>> camapignIndex = indexByCampaign;
-
-                foreach (IFrame frame in this)
+                foreach (IFrame frame in Frames)
                 {
                     streamWriter.WriteLine(frame.ToString()); // Write & WriteLine call the same
                     //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
                     // so ading the '\n' manually has no effect just causing platform dependent issues. 
-                    localFrames.Add(frame);
-                    typeIndex[frame.SurveyType].Add(frame);
-                    if(camapignIndex.TryGetValue(frame.CampaignID, out List<IFrame>  camapignList))
-                        camapignList.Add(frame);
-                    else
-                        camapignIndex.Add(frame.CampaignID, new List<IFrame>(9) { frame });
                 }
             }
             else
@@ -130,52 +126,70 @@ namespace SL3Reader
             streamWriter.Close();
         }
 
-        public void ExportSideScans(string directory)
+        private static List<int> GetBreakPoints(List<IFrame> frames, out int contigousLength)
         {
-            DirectoryInfo dir = new(directory);
-            dir.Create();
-
-            const int width = 2800;
-            List<IFrame> sideScanFrames = IndexByType[SurveyType.SideScan];
-            int frameCount = sideScanFrames.Count;
-            if (frameCount < 1) return;
-            int maxHeight = 1, currentHeiht = 0;
             int i = 0;
-            List<int> breakpoints = new(); // TODO: add capacity
-            float maxRange = sideScanFrames[0].MaxRange;
+            int frameCount = frames.Count;
+            var firstFrame = frames[0];
+            List<int> breakpoints = new(512) { 0 };
+            float previousRange = firstFrame.MaxRange;
 
             for (; i < frameCount; i++)
             {
-                float currentMaxRange = sideScanFrames[i].MaxRange;
-                currentHeiht++; // Should be here due to the zero indexing.
-                if (currentMaxRange != maxRange)
+                float currentRange = frames[i].MaxRange;
+                if (currentRange != previousRange)
                 {
-                    maxRange = currentMaxRange;
+                    previousRange = currentRange;
                     breakpoints.Add(i);
-                    if (currentHeiht > maxHeight)
-                        maxHeight = currentHeiht;
-                    currentHeiht = 0;
-                    continue;
                 }
-
             }
-            if (currentHeiht > maxHeight)
-                maxHeight = currentHeiht;
+
+            if (breakpoints[^1] != (i -= 1)) breakpoints.Add(i);
+
+            contigousLength = 0;
+
+            for (i = 0; i < breakpoints.Count - 1; i += 2)
+            {
+                int delta;
+                if (contigousLength < (delta = breakpoints[1 + i] - breakpoints[i]))
+                    contigousLength = delta;
+            }
+
+            return breakpoints;
+        }
+
+        public void ExportSideScans(string path)
+        {
+            const int width = 2800; // Valid only for SL3 3200 files.
+
+            ArgumentNullException.ThrowIfNull(nameof(path));
+
+            if (Directory.Exists(path = Path.GetFullPath(path)))
+                Directory.Delete(path, true);
+            Directory.CreateDirectory(path);
+
+            int frameCount = Frames.Count; // Initialize the frames.
+            if (frameCount < 1) return;
+
+            List<IFrame> sideScanFrames = IndexByType[SurveyType.SideScan];
+            if (sideScanFrames.Count < 1) return; // Return when no sidescan exists
+
+            List<int> breakpoints = GetBreakPoints(sideScanFrames, out int maxHeight);
 
             byte[] buffer = BitmapHelper.CreateBuffer(maxHeight, width);
 
-            i = 0;
-            foreach (int breakpoint in breakpoints)
+            for (int i = 0; i < breakpoints.Count - 1; i += 2)
             {
-                BitmapHelper.UpdateBuffer(buffer, breakpoint - i, width,
+                int final = breakpoints[1 + i], first = breakpoints[i];
+                BitmapHelper.UpdateBuffer(buffer, final - first, width,
                 out int fullStride,
                 out Span<byte> fullBuffer,
                 out Span<byte> dataBuffer);
 
                 int k = 0;
-                for (; i < breakpoint; i++)
+                for (int j = first; j < final; j++)
                 {
-                    long dataOffset = sideScanFrames[i].DataOffset;
+                    long dataOffset = sideScanFrames[j].DataOffset;
                     if (Seek(dataOffset, SeekOrigin.Begin) != dataOffset)
                     {
                         throw new IOException("Unable to seek.");
@@ -183,7 +197,8 @@ namespace SL3Reader
 
                     ReadExactly(dataBuffer.Slice(k++ * fullStride, width));
                 }
-                using FileStream stream = File.OpenWrite(Path.Combine(dir.FullName, $"SS_{breakpoint}.bmp"));
+
+                using FileStream stream = File.OpenWrite(Path.Combine(path, $"SS_{final}.bmp"));
                 stream.Write(fullBuffer);
                 stream.Close();
             }
@@ -218,24 +233,63 @@ namespace SL3Reader
 
         public unsafe void Export3D(string path)
         {
-            List<IFrame> localFrames = IndexByType[SurveyType.ThreeDimensional];
-            int length = localFrames.Count;
+            ArgumentNullException.ThrowIfNull(nameof(path));
+
+            path = Path.GetFullPath(path);
+
+            int frameCount = Frames.Count; // Initialize the frames.
+            if (frameCount < 1) return;
+
+            using StreamWriter streamWriter = File.CreateText(path);
+
+            List<IFrame> frames3D = IndexByType[SurveyType.ThreeDimensional];
+            int frames3DLength = frames3D.Count;
+            if (frames3DLength < 1) return;
 
             ThreeDimensionalFrameHeader* header = stackalloc ThreeDimensionalFrameHeader[1];
             InterferometricMeasuement* measurements = stackalloc InterferometricMeasuement[400];
 
-            for (int i = 0; i < length; i++)
+            for (int i = 0; i < frames3DLength; i++)
             {
-                IFrame _3DFrame = (Frame)localFrames[i];
-                Seek(_3DFrame.DataOffset, SeekOrigin.Begin);
+                IFrame frame = frames3D[i];
+                var offset = frame.DataOffset;
+                if (Seek(offset, SeekOrigin.Begin) != offset)
+                    throw new IOException("Unable to seek!");
+
+                int size;
                 ReadExactly(new(header, ThreeDimensionalFrameHeader.Size));
-                ReadExactly(new(measurements, header->NumberOfLeftBytes));
-                var limit = measurements + (header->NumberOfLeftBytes / InterferometricMeasuement.Size);
+
+                ReadExactly(new(measurements, size = header->NumberOfLeftBytes));
+                var limit = measurements + (size / InterferometricMeasuement.Size);
                 for (InterferometricMeasuement* measurement = measurements; measurement < limit; measurement++)
                 {
-                    Debug.Print(measurement->ToString());
+                    streamWriter.WriteLine($"{-measurement->Delta},{i},{measurement->Depth},R");
+                }
+
+                ReadExactly(new(measurements, size = header->NumberOfRightBytes));
+                limit = measurements + (size / InterferometricMeasuement.Size);
+                for (InterferometricMeasuement* measurement = measurements; measurement < limit; measurement++)
+                {
+                    streamWriter.WriteLine($"{measurement->Delta},{i},{measurement->Depth},R");
+                }
+
+
+
+                ReadExactly(new(measurements, size = header->NumberOfUnreliableLeftBytes));
+                limit = measurements + (size / InterferometricMeasuement.Size);
+                for (InterferometricMeasuement* measurement = measurements; measurement < limit; measurement++)
+                {
+                    streamWriter.WriteLine($"{-measurement->Delta},{i},{measurement->Depth},U");
+                }
+
+                ReadExactly(new(measurements, size = header->NumberOfUnreliableRightBytes));
+                limit = measurements + (size / InterferometricMeasuement.Size);
+                for (InterferometricMeasuement* measurement = measurements; measurement < limit; measurement++)
+                {
+                    streamWriter.WriteLine($"{measurement->Delta},{i},{measurement->Depth},U");
                 }
             }
+            streamWriter.Close();
         }
 
         #region Enumerator support

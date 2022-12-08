@@ -294,14 +294,13 @@ namespace SL3Reader
             out Span<byte> imageFile,
             out Span<byte> pixelData)
         {
-
             fullStride = width; //width + (4 - (width % 4));
             int fileSize;
             fixed (byte* pBuffer = buffer)
             {
                 BitmapFileHeader* fileHeader = (BitmapFileHeader*)pBuffer;
                 *fileHeader = new(width, height);
-                fileSize =(int) fileHeader->FileSize;
+                fileSize = (int)fileHeader->FileSize;
                 *(BitmapInfoHeader*)(pBuffer + BitmapFileHeader.Size) = new(width, height);
             }
             imageFile = new Span<byte>(buffer, 0, fileSize);
