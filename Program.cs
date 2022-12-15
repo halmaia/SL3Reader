@@ -28,6 +28,7 @@ namespace SL3Reader
             }
 
             using SL3Reader sl3reader = new(input);
+            // sl3reader.ExamineUnknown8Datasets();
             sl3reader.Export3D(output);
             //sl3reader.ExportSideScans(@"F:\SS\");
             //sl3reader.ExportToCSV(output, true);

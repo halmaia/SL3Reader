@@ -82,7 +82,6 @@ namespace SL3Reader
             indexByCampaign = new();
         }
         #endregion Indices
-
         public unsafe SL3Reader(string path) :
            base(path, FileMode.Open, FileAccess.Read,
            FileShare.Read, 4096, FileOptions.RandomAccess)
@@ -204,32 +203,30 @@ namespace SL3Reader
             }
         }
 
-        //public void ExportInterfereometricDataset(string directory)
-        //{
-        //    FrameList localFrames = Unknown8ScanFrames;
-        //    int length = localFrames.Count;
+        public unsafe void ExamineUnknown8Datasets()
+        {
+            int frameCount = Frames.Count; // Initialize the frames.
+            if (frameCount < 1) return;
 
-        //    for (int i = 0; i < length - 1; i++)
-        //    {
-        //        BasicFrame FirstFrame = (BasicFrame)localFrames[i];
-        //        Seek(FirstFrame.DataOffset, SeekOrigin.Begin);
-        //        Span<ushort> First = (new ushort[512/2]).AsSpan();
-        //        ReadExactly(System.Runtime.InteropServices.MemoryMarshal.AsBytes(First));
+            List<IFrame> unknown8Frames = IndexByType[SurveyType.Unknown8];
+            int unknown8FrameCount = unknown8Frames.Count;
+            if (frameCount < 1) return; // Return when no sidescan exists
 
+            var buffer = new byte[512];
+            fixed(byte* p =&buffer[0]) {
+                for (int i = 0; i < unknown8FrameCount - 1; i++)
+                {
+                    IFrame frame = unknown8Frames[i];
+                    Seek(frame.DataOffset, SeekOrigin.Begin);
+                    Read(new(p,512));
+                    for (int j = 0; j < 256; j += 2)
+                    {
+                        Debug.Print($"{buffer[j]}, {buffer[1 + j]}");
+                    }
+                }
 
-        //        BasicFrame SecondFrame = (BasicFrame)localFrames[i + 1];
-        //        Seek(SecondFrame.DataOffset, SeekOrigin.Begin);
-        //        Span<float> Second = (new float[512/4]).AsSpan();
-        //        ReadExactly(System.Runtime.InteropServices.MemoryMarshal.AsBytes(Second));
-
-        //        for (int j = 0; j < 512/4; j += 1)
-        //        {
-        //            System.Numerics.Complex complex = new(First[j], Second[j]);
-        //            Debug.Print((complex.Phase * (360 / double.Tau)).ToString());
-        //        }
-
-        //    }
-        //}
+            }
+        }
 
         public unsafe void Export3D(string path)
         {
@@ -247,7 +244,8 @@ namespace SL3Reader
             if (frames3DLength < 1) return;
 
             ThreeDimensionalFrameHeader* header = stackalloc ThreeDimensionalFrameHeader[1];
-            InterferometricMeasuement* measurements = stackalloc InterferometricMeasuement[400];
+            byte* measurements = stackalloc byte[400 * InterferometricMeasuement.Size],
+                  reset = measurements;
 
             for (int i = 0; i < frames3DLength; i++)
             {
@@ -256,38 +254,51 @@ namespace SL3Reader
                 if (Seek(offset, SeekOrigin.Begin) != offset)
                     throw new IOException("Unable to seek!");
 
-                int size;
                 ReadExactly(new(header, ThreeDimensionalFrameHeader.Size));
 
-                ReadExactly(new(measurements, size = header->NumberOfLeftBytes));
-                var limit = measurements + (size / InterferometricMeasuement.Size);
-                for (InterferometricMeasuement* measurement = measurements; measurement < limit; measurement++)
+                ReadExactly(new(measurements, header->NumberOfLeftBytes + 
+                                              header->NumberOfRightBytes + 
+                                              header->NumberOfUnreliableBytes));
+
+                byte* limit = measurements + header->NumberOfLeftBytes;
+                for (; measurements < limit; measurements += InterferometricMeasuement.Size)
                 {
+                    InterferometricMeasuement* measurement = (InterferometricMeasuement*)measurements;
                     streamWriter.WriteLine($"{-measurement->Delta},{i},{measurement->Depth},R");
                 }
 
-                ReadExactly(new(measurements, size = header->NumberOfRightBytes));
-                limit = measurements + (size / InterferometricMeasuement.Size);
-                for (InterferometricMeasuement* measurement = measurements; measurement < limit; measurement++)
+                limit = measurements + header->NumberOfRightBytes;
+                for (; measurements < limit; measurements += InterferometricMeasuement.Size)
                 {
+                    InterferometricMeasuement* measurement = (InterferometricMeasuement*)measurements;
                     streamWriter.WriteLine($"{measurement->Delta},{i},{measurement->Depth},R");
                 }
 
-
-
-                ReadExactly(new(measurements, size = header->NumberOfUnreliableLeftBytes));
-                limit = measurements + (size / InterferometricMeasuement.Size);
-                for (InterferometricMeasuement* measurement = measurements; measurement < limit; measurement++)
+                limit = measurements + header->NumberOfUnreliableLeftBytes;
+                for (; measurements < limit; measurements += InterferometricMeasuement.Size)
                 {
-                    streamWriter.WriteLine($"{-measurement->Delta},{i},{measurement->Depth},U");
+                    InterferometricMeasuement* measurement = (InterferometricMeasuement*)measurements;
+                    float delta = measurement->Delta;
+                    if (delta is < 0.001f or > 5000.0f) continue;
+                    float depth = measurement->Depth;
+                    if(depth is < 1f or > 250.0f) continue;
+
+                    streamWriter.WriteLine($"{-delta},{i},{depth},U");
                 }
 
-                ReadExactly(new(measurements, size = header->NumberOfUnreliableRightBytes));
-                limit = measurements + (size / InterferometricMeasuement.Size);
-                for (InterferometricMeasuement* measurement = measurements; measurement < limit; measurement++)
+                limit = measurements + header->NumberOfUnreliableRightBytes;
+                for (; measurements < limit; measurements += InterferometricMeasuement.Size)
                 {
-                    streamWriter.WriteLine($"{measurement->Delta},{i},{measurement->Depth},U");
+                    InterferometricMeasuement* measurement = (InterferometricMeasuement*)measurements;
+                    float delta = measurement->Delta;
+                    if (delta is < 0.001f or > 5000.0f) continue;
+                    float depth = measurement->Depth;
+                    if (depth is < 1f or > 250.0f) continue;
+
+                    streamWriter.WriteLine($"{delta},{i},{depth},U");
                 }
+
+                measurements = reset;
             }
             streamWriter.Close();
         }
