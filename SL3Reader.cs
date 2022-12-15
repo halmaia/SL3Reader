@@ -60,6 +60,7 @@ namespace SL3Reader
         private SortedDictionary<SurveyType, List<IFrame>> indexByType;
         private SortedDictionary<uint, List<IFrame>> indexByCampaign;
         public SortedDictionary<SurveyType, List<IFrame>> IndexByType => indexByType;
+        // Maybe useless, due to the drifting in 3D.
         public SortedDictionary<uint, List<IFrame>> IndexByCampaign => indexByCampaign;
         private void InitIndexSupport(int estimatedCount)
         {
@@ -157,7 +158,7 @@ namespace SL3Reader
             return breakpoints;
         }
 
-        public void ExportSideScans(string path)
+        public void ExportImagery(string path, SurveyType surveyType = SurveyType.SideScan)
         {
             const int width = 2800; // Valid only for SL3 3200 files.
 
@@ -170,7 +171,7 @@ namespace SL3Reader
             int frameCount = Frames.Count; // Initialize the frames.
             if (frameCount < 1) return;
 
-            List<IFrame> sideScanFrames = IndexByType[SurveyType.SideScan];
+            List<IFrame> sideScanFrames = IndexByType[surveyType];
             if (sideScanFrames.Count < 1) return; // Return when no sidescan exists
 
             List<int> breakpoints = GetBreakPoints(sideScanFrames, out int maxHeight);
@@ -210,7 +211,7 @@ namespace SL3Reader
 
             List<IFrame> unknown8Frames = IndexByType[SurveyType.Unknown8];
             int unknown8FrameCount = unknown8Frames.Count;
-            if (frameCount < 1) return; // Return when no sidescan exists
+            if (frameCount < 1) return; // Return when no U8 exists
 
             var buffer = new byte[512];
             fixed(byte* p =&buffer[0]) {
