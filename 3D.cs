@@ -28,6 +28,10 @@ namespace SL3Reader
         public readonly int UnknownAt68 { get; }
         public readonly int UnknownAt72 { get; }
 
+        public int NumberOfUsedBytes => NumberOfLeftBytes +
+                                        NumberOfRightBytes + 
+                                        NumberOfUnreliableBytes;
+
     }
 
     [StructLayout(LayoutKind.Sequential, Size = Size)]

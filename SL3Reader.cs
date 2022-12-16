@@ -257,9 +257,7 @@ namespace SL3Reader
 
                 ReadExactly(new(header, ThreeDimensionalFrameHeader.Size));
 
-                ReadExactly(new(measurements, header->NumberOfLeftBytes + 
-                                              header->NumberOfRightBytes + 
-                                              header->NumberOfUnreliableBytes));
+                ReadExactly(new(measurements, header->NumberOfUsedBytes));
 
                 byte* limit = measurements + header->NumberOfLeftBytes;
                 for (; measurements < limit; measurements += InterferometricMeasuement.Size)
