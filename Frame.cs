@@ -3,6 +3,9 @@ using static System.Globalization.CultureInfo;
 using System.Runtime.InteropServices;
 using System;
 using System.Runtime.CompilerServices;
+using System.ComponentModel;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace SL3Reader
 {
@@ -55,22 +58,25 @@ namespace SL3Reader
         #endregion Type support
 
         #region Extended properties
-        uint LastPrimaryChannelFrameOffset { get; }
-        uint LastSecondaryChannelFrameOffset { get; }
-        uint LastDownScanChannelFrameOffset { get; }
-        uint LastSidescanLeftChannelFrameOffset { get; }
-        uint LastSidescanRightChannelFrameOffset { get; }
-        uint LastSidescanCompositeChannelFrameOffset { get; }
+        uint LastPrimaryScanFrameOffset { get; }
+        uint LastSecondaryScanFrameOffset { get; }
+        uint LastDownScanFrameOffset { get; }
+        uint LastLeftSidescanFrameOffset { get; }
+        uint LastRightSidescanFrameOffset { get; }
+        uint LastSidescanFrameOffset { get; }
         uint UnknownAt152 { get; }
         uint UnknownAt156 { get; }
         uint UnknownAt160 { get; }
-        uint Last3DChannelFrameOffset { get; }
+        uint Last3DFrameOffset { get; }
         #endregion Extended properties
 
         #region DateTime support
         DateTime Timestamp { get; }
         #endregion DateTime support
 
+        #region Search support
+        bool GetNearest3DFrame(List<IFrame> candidates, out IFrame? frame3D);
+        #endregion Search support
     }
 
     [StructLayout(LayoutKind.Explicit, Size = ExtendedSize)]
@@ -82,6 +88,7 @@ namespace SL3Reader
         public const int MinimumInitSize = 44;
 
         #region Basic Properties
+        [DataObjectField(true, true, false, sizeof(uint))]
         [field: FieldOffset(0)] public readonly uint PositionOfFirstByte { get; } // (0)
         [field: FieldOffset(4)] public readonly uint UnknownAt4 { get; } // (4) In my files it is always 10.
         [field: FieldOffset(8)] public readonly ushort LengthOfFrame { get; } // (8)
@@ -139,18 +146,62 @@ namespace SL3Reader
         #endregion Type support
 
         #region Extended Properties
-        [field: FieldOffset(128)] public readonly uint LastPrimaryChannelFrameOffset { get; } // (128)
-        [field: FieldOffset(132)] public readonly uint LastSecondaryChannelFrameOffset { get; }  // (132)
-        [field: FieldOffset(136)] public readonly uint LastDownScanChannelFrameOffset { get; }  // (136)
-        [field: FieldOffset(140)] public readonly uint LastSidescanLeftChannelFrameOffset { get; }  // (140)
-        [field: FieldOffset(144)] public readonly uint LastSidescanRightChannelFrameOffset { get; }  // (144)
-        [field: FieldOffset(148)] public readonly uint LastSidescanCompositeChannelFrameOffset { get; }  // (148)
+        [field: FieldOffset(128)] public readonly uint LastPrimaryScanFrameOffset { get; } // (128)
+        [field: FieldOffset(132)] public readonly uint LastSecondaryScanFrameOffset { get; }  // (132)
+        [field: FieldOffset(136)] public readonly uint LastDownScanFrameOffset { get; }  // (136)
+        [field: FieldOffset(140)] public readonly uint LastLeftSidescanFrameOffset { get; }  // (140)
+        [field: FieldOffset(144)] public readonly uint LastRightSidescanFrameOffset { get; }  // (144)
+        [field: FieldOffset(148)] public readonly uint LastSidescanFrameOffset { get; }  // (148)
         [field: FieldOffset(152)] public readonly uint UnknownAt152 { get; }  // (152)
         [field: FieldOffset(156)] public readonly uint UnknownAt156 { get; }  // (156)
         [field: FieldOffset(160)] public readonly uint UnknownAt160 { get; }  // (160)
-        [field: FieldOffset(164)] public readonly uint Last3DChannelFrameOffset { get; }  // (164)
+        [field: FieldOffset(164)] public readonly uint Last3DFrameOffset { get; }  // (164)
 
         #endregion Extended properties
+
+        #region Search support
+        public readonly bool GetNearest3DFrame(List<IFrame> candidates, [NotNullWhen(true)] out IFrame? frame3D) =>
+            GetNearestFrame(candidates, this, out frame3D);
+
+        public static bool GetNearestFrame(List<IFrame> candidates,
+                                           in IFrame currentFrame,
+                                           [NotNullWhen(true)] out IFrame? frame)
+        {
+            int count;
+            if (currentFrame.FrameType == FrameType.Extended &&
+                candidates is not null &&
+                (count = candidates.Count) > 0)
+            {
+                if (currentFrame.Last3DFrameOffset == 0)
+                {
+                    IFrame previousFrame = candidates[0];
+                    IFrame nextFrame = count > 1 ? candidates[1] : previousFrame;
+                    frame = SelectClosestFrame(previousFrame, nextFrame, currentFrame.Milliseconds);
+                    return true;
+                }
+
+                for (int i = 0; i < count; i++)
+                {
+                    if (candidates[i].PositionOfFirstByte == currentFrame.Last3DFrameOffset)
+                    {
+                        IFrame previousFrame = candidates[i++];
+                        IFrame nextFrame = i < count ? candidates[i] : previousFrame;
+                        frame = SelectClosestFrame(previousFrame, nextFrame, currentFrame.Milliseconds);
+                        return true;
+                    }
+                }
+            }
+            frame = null;
+            return false;
+
+            static IFrame SelectClosestFrame(IFrame previousFrame, IFrame nextFrame, uint milliseconds)
+            {
+                return Math.Abs(previousFrame.Milliseconds - milliseconds) <
+                          Math.Abs(nextFrame.Milliseconds - milliseconds) ?
+                          previousFrame : nextFrame;
+            }
+        }
+        #endregion Search support
 
         #region DateTime support
         private static DateTime timestampBase;
@@ -161,7 +212,7 @@ namespace SL3Reader
         #endregion
 
         #region WGS84
-        private const double PolarRadius = 6356752.3142d; // Lowrance uses float causing truncated precision.
+        private const double PolarRadius = 6356752.3142d; // Lowrance uses float, causing truncated precision.
         private const double RadToDeg = 360d / double.Tau;
         public double Longitude => X / PolarRadius * RadToDeg;
         public double Latitude => RadToDeg * double.Atan(double.Sinh(Y / PolarRadius));

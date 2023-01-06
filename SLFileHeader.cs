@@ -22,7 +22,8 @@ namespace SL3Reader
 
         public readonly short Reserved => reserved;
 
-        public readonly override string ToString() => fileFormat.ToString() + " (" + blockSize.ToString() + ')';
+        public readonly override string ToString() => 
+            fileFormat.ToString() + " (" + blockSize.ToString() + ')';
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly bool IsValidFormat(LogFileFormat fileFormatToTest) => 

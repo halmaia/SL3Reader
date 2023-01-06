@@ -2,12 +2,10 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
-using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using System.Threading.Channels;
 using static System.Runtime.InteropServices.NativeMemory;
 
 namespace SL3Reader
@@ -37,6 +35,18 @@ namespace SL3Reader
             InitIndexSupport(localFrames.Capacity);
             SortedDictionary<SurveyType, List<IFrame>> typeIndex = indexByType;
             SortedDictionary<uint, List<IFrame>> camapignIndex = indexByCampaign;
+
+            localFrames.AddRange(collection);
+
+            uint prev = 0, next = 0;
+            foreach (IFrame item in localFrames)
+            {
+                if (prev < (next = item.Milliseconds))
+                {
+                    var s = 5;
+                }
+                prev =next;
+            }
 
             foreach (IFrame frame in collection)
             {
@@ -90,10 +100,10 @@ namespace SL3Reader
             if (Length < (SLFileHeader.Size + Frame.MinimumInitSize))
                 throw new EndOfStreamException("The file is too short to be valid.");
 
-            SLFileHeader* pFileHeader = stackalloc SLFileHeader[1];
-            ReadExactly(new(pFileHeader, SLFileHeader.Size));
+            SLFileHeader fileHeader = new();
+            ReadExactly(new(&fileHeader, SLFileHeader.Size));
 
-            if (!pFileHeader->IsValidFormat(LogFileFormat.SL3))
+            if (!fileHeader.IsValidFormat(LogFileFormat.SL3))
                 throw new InvalidDataException("Unsupported file type. Expected type SL3.");
         }
 
@@ -130,9 +140,8 @@ namespace SL3Reader
         {
             int i = 0;
             int frameCount = frames.Count;
-            var firstFrame = frames[0];
+            float previousRange = frames[0].MaxRange;
             List<int> breakpoints = new(512) { 0 };
-            float previousRange = firstFrame.MaxRange;
 
             for (; i < frameCount; i++)
             {
@@ -144,7 +153,8 @@ namespace SL3Reader
                 }
             }
 
-            if (breakpoints[^1] != (i -= 1)) breakpoints.Add(i);
+            if (breakpoints[^1] != (i -= 1))
+                breakpoints.Add(i); // There was no change in the range, so we have to add the last one.
 
             contigousLength = 0;
 
@@ -160,7 +170,7 @@ namespace SL3Reader
 
         public void ExportImagery(string path, SurveyType surveyType = SurveyType.SideScan)
         {
-            const int width = 2800; // Valid only for SL3 3200 files.
+            const int width = 2800; // Valid only for SL3/3200 files.
 
             ArgumentNullException.ThrowIfNull(nameof(path));
 
@@ -214,12 +224,13 @@ namespace SL3Reader
             if (frameCount < 1) return; // Return when no U8 exists
 
             var buffer = new byte[512];
-            fixed(byte* p =&buffer[0]) {
+            fixed (byte* p = &buffer[0])
+            {
                 for (int i = 0; i < unknown8FrameCount - 1; i++)
                 {
                     IFrame frame = unknown8Frames[i];
                     Seek(frame.DataOffset, SeekOrigin.Begin);
-                    Read(new(p,512));
+                    Read(new(p, 512));
                     for (int j = 0; j < 256; j += 2)
                     {
                         Debug.Print($"{buffer[j]}, {buffer[1 + j]}");
@@ -244,7 +255,13 @@ namespace SL3Reader
             int frames3DLength = frames3D.Count;
             if (frames3DLength < 1) return;
 
-            ThreeDimensionalFrameHeader* header = stackalloc ThreeDimensionalFrameHeader[1];
+            /// Test
+            List<IFrame> framesSS = IndexByType[SurveyType.SideScan];
+            framesSS[56].GetNearest3DFrame(frames3D, out IFrame? frm);
+            ///END Test
+
+            ThreeDimensionalFrameHeader header = new();
+            Span<byte> sHeader = new(&header, ThreeDimensionalFrameHeader.Size);
             byte* measurements = stackalloc byte[400 * InterferometricMeasuement.Size],
                   reset = measurements;
 
@@ -255,37 +272,37 @@ namespace SL3Reader
                 if (Seek(offset, SeekOrigin.Begin) != offset)
                     throw new IOException("Unable to seek!");
 
-                ReadExactly(new(header, ThreeDimensionalFrameHeader.Size));
+                ReadExactly(sHeader);
 
-                ReadExactly(new(measurements, header->NumberOfUsedBytes));
+                ReadExactly(new(measurements, header.NumberOfUsedBytes));
 
-                byte* limit = measurements + header->NumberOfLeftBytes;
+                byte* limit = measurements + header.NumberOfLeftBytes;
                 for (; measurements < limit; measurements += InterferometricMeasuement.Size)
                 {
                     InterferometricMeasuement* measurement = (InterferometricMeasuement*)measurements;
                     streamWriter.WriteLine($"{-measurement->Delta},{i},{measurement->Depth},R");
                 }
 
-                limit = measurements + header->NumberOfRightBytes;
+                limit = measurements + header.NumberOfRightBytes;
                 for (; measurements < limit; measurements += InterferometricMeasuement.Size)
                 {
                     InterferometricMeasuement* measurement = (InterferometricMeasuement*)measurements;
                     streamWriter.WriteLine($"{measurement->Delta},{i},{measurement->Depth},R");
                 }
 
-                limit = measurements + header->NumberOfUnreliableLeftBytes;
+                limit = measurements + header.NumberOfUnreliableLeftBytes;
                 for (; measurements < limit; measurements += InterferometricMeasuement.Size)
                 {
                     InterferometricMeasuement* measurement = (InterferometricMeasuement*)measurements;
                     float delta = measurement->Delta;
                     if (delta is < 0.001f or > 5000.0f) continue;
                     float depth = measurement->Depth;
-                    if(depth is < 1f or > 250.0f) continue;
+                    if (depth is < 1f or > 250.0f) continue;
 
                     streamWriter.WriteLine($"{-delta},{i},{depth},U");
                 }
 
-                limit = measurements + header->NumberOfUnreliableRightBytes;
+                limit = measurements + header.NumberOfUnreliableRightBytes;
                 for (; measurements < limit; measurements += InterferometricMeasuement.Size)
                 {
                     InterferometricMeasuement* measurement = (InterferometricMeasuement*)measurements;
