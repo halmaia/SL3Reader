@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices.Marshalling;
 
 namespace SL3Reader
 {
@@ -301,7 +302,7 @@ namespace SL3Reader
                 BitmapFileHeader* pFileHeader = (BitmapFileHeader*)pBuffer;
                 int fileSize = (int)pFileHeader->Update(width, height);
                 ((BitmapInfoHeader*)(pBuffer + BitmapFileHeader.Size))->Update (width, height);
-                fileBuffer = new Span<byte>(pBuffer, fileSize);
+                fileBuffer = new Span<byte>(pBuffer, fileSize); 
                 pixelData = fileBuffer[BitmapCombinedHeaderSize..];
             }
         }

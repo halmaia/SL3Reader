@@ -4,6 +4,7 @@ using System.Buffers;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -108,7 +109,6 @@ namespace SL3Reader
             reuseFrames && frames is null ?
                 Frames : this;
 
-
             FileStreamOptions fileStreamOptions = new() { Access = FileAccess.Write, Mode = FileMode.OpenOrCreate, Share = FileShare.Read, Options = FileOptions.SequentialScan };
             using StreamWriter streamWriter = new(path, System.Text.Encoding.ASCII, fileStreamOptions);// Delay file open
             streamWriter.WriteLine(CSVHeader);
@@ -173,10 +173,13 @@ namespace SL3Reader
 
             contigousLength = 0;
 
-            for (i = 0; i < breakpoints.Count - 1; i += 2)
+            for (int j = 0,
+                 maxIndex = breakpoints.Count - 1,
+                 delta;
+                 j < maxIndex;
+                 j += 2)
             {
-                int delta;
-                if (contigousLength < (delta = breakpoints[1 + i] - breakpoints[i]))
+                if (contigousLength < (delta = breakpoints[1 + j] - breakpoints[j]))
                     contigousLength = delta;
             }
 
@@ -185,47 +188,61 @@ namespace SL3Reader
 
         public void ExportImagery(string path, SurveyType surveyType = SurveyType.SideScan)
         {
-            const int width = 2800; // Valid only for SL3/3200 files.
-
             ArgumentNullException.ThrowIfNull(nameof(path));
 
-            if (Directory.Exists(path = Path.GetFullPath(path)))
+            if (Directory.Exists(path))
                 Directory.Delete(path, true);
-            Directory.CreateDirectory(path);
+            path = Directory.CreateDirectory(path).FullName;
 
             int frameCount = Frames.Count; // Initialize the frames.
             if (frameCount < 1) return;
 
-            List<IFrame> sideScanFrames = IndexByType[surveyType];
-            if (sideScanFrames.Count < 1) return; // Return when no sidescan exists
+            List<IFrame> imageFrames = IndexByType[surveyType];
+            if (imageFrames.Count < 1) return; // Return when no sidescan exists
+            int numberOfColumns = (int)imageFrames[0].LengthOfEchoData;
+            string prefix = GetPrefix(surveyType);
 
-            List<int> breakpoints = GetBreakPoints(sideScanFrames, out int maxHeight);
+            List<int> breakpoints = GetBreakPoints(imageFrames, out int maxHeight);
 
-            byte[] buffer = BitmapHelper.CreateBuffer(maxHeight, width);
+            byte[] buffer = BitmapHelper.CreateBuffer(maxHeight, numberOfColumns);
 
-            for (int i = 0; i < breakpoints.Count - 1; i += 2)
+            for (int i = 0, maxIndex = breakpoints.Count - 1; i < maxIndex; i ++)
             {
-                int final = breakpoints[1 + i], first = breakpoints[i];
+                int first = breakpoints[i], final = breakpoints[1 + i];
                 BitmapHelper.UpdateBuffer(
-                    buffer, final - first, width,
+                    buffer, final - first, numberOfColumns,
                     out int fullStride,
                     out Span<byte> fileBuffer,
-                    out Span<byte> imageBuffer);
+                    out Span<byte> pixelData);
 
                 for (int j = first, k = 0; j < final; j++)
                 {
-                    long dataOffset = sideScanFrames[j].DataOffset;
+                    long dataOffset = imageFrames[j].DataOffset;
                     if (Seek(dataOffset, SeekOrigin.Begin) != dataOffset)
                         throw new IOException("Unable to seek.");
 
-                    ReadExactly(imageBuffer.Slice(fullStride * k++, width));
+                    ReadExactly(pixelData.Slice(fullStride * k++, numberOfColumns));
                 }
 
-                using SafeFileHandle handle = File.OpenHandle(Path.Combine(path, $"SS_{final}.bmp"),
+                using SafeFileHandle handle = File.OpenHandle(Path.Combine(path, prefix + final + ".bmp"),
                     FileMode.CreateNew, FileAccess.Write, FileShare.None, FileOptions.SequentialScan);
                 RandomAccess.Write(handle, fileBuffer, 0);
             }
         }
+
+
+        [SkipLocalsInit, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static string GetPrefix(SurveyType surveyType) =>
+            surveyType switch
+            {
+                SurveyType.SideScan => "SS_",
+                SurveyType.DownScan => "DS_",
+                SurveyType.Primary => "PS_",
+                SurveyType.Secondary => "SecS_",
+                SurveyType.Unknown8 => "U8_",
+                SurveyType.Unknown7 => "U7_",
+                _ => "UNKNOWN_"
+            };
 
         public unsafe void ExamineUnknown8Datasets()
         {
