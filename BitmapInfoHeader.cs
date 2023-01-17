@@ -1,37 +1,46 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace SL3Reader
 {
-    [StructLayout(LayoutKind.Sequential, Size = Size)]
-    public readonly struct BitmapInfoHeader
+    [StructLayout(LayoutKind.Sequential, Size = Size), SkipLocalsInit]
+    internal struct BitmapInfoHeader
     {
-        public const int Size = 40;
+        internal const int Size = 40;
 
-        public readonly uint StructureSize;
-        public readonly int Width;
-        public readonly int Height;
-        public readonly ushort Planes;
-        public readonly ushort BitCount;
-        public readonly BitmapCompressionMode Compression;
-        public readonly uint ImageSize;
-        public readonly int XPixelsPerMeter;
-        public readonly int YPixelsPerMeter;
-        public readonly uint NumberOfUsedColors;
-        public readonly uint NumberOfImportantColors;
+        private uint StructureSize;
+        private int Width;
+        private int Height;
+        private ushort Planes;
+        private ushort BitCount;
+        private BitmapCompressionMode Compression;
+        private uint ImageSize;
+        private int XPixelsPerMeter;
+        private int YPixelsPerMeter;
+        private uint NumberOfUsedColors;
+        private uint NumberOfImportantColors;
 
-        public BitmapInfoHeader(int width,
-                                int height,
-                                ushort bitCount = 8,
-                                int xPixelsPerMeter = 0,
-                                int yPixelsPerMeter = 0)
+        internal BitmapInfoHeader(int width,
+                                  int height,
+                                  ushort bitCount = 8,
+                                  int xPixelsPerMeter = 0,
+                                  int yPixelsPerMeter = 0) =>
+            Update(width, height, bitCount, xPixelsPerMeter, yPixelsPerMeter);
+
+        internal void Update(int width,
+                             int height,
+                             ushort bitCount = 8,
+                             int xPixelsPerMeter = 0,
+                             int yPixelsPerMeter = 0)
         {
+            const ushort ByteSize = 8;
             StructureSize = Size;
             Width = width;
             Height = height;
             Planes = 1;
             BitCount = bitCount;
             Compression = BitmapCompressionMode.BI_RGB;
-            ImageSize = (uint)(bitCount / 8 * height * width); // (width + (4 - width % 4))
+            ImageSize = (uint)(bitCount / ByteSize * height * width); // (width + (4 - width % 4))
             XPixelsPerMeter = xPixelsPerMeter;
             YPixelsPerMeter = yPixelsPerMeter;
             NumberOfUsedColors = 256;

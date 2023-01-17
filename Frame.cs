@@ -224,6 +224,7 @@ namespace SL3Reader
             IFormatProvider invariantCulture = InvariantCulture;
             return string.Join(',', new string[]
         {
+            Timestamp.ToString("yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'"),
             SurveyType.ToString(),
             WaterDepth.ToString(invariantCulture),
             Longitude.ToString(invariantCulture),

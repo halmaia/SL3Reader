@@ -1,10 +1,13 @@
-﻿using System;
+﻿using Microsoft.Win32.SafeHandles;
+using System;
+using System.Buffers;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 using static System.Runtime.InteropServices.NativeMemory;
 
@@ -33,20 +36,9 @@ namespace SL3Reader
         {
             List<IFrame> localFrames = CreateNewFrameList();
             InitIndexSupport(localFrames.Capacity);
+
             SortedDictionary<SurveyType, List<IFrame>> typeIndex = indexByType;
             SortedDictionary<uint, List<IFrame>> camapignIndex = indexByCampaign;
-
-            localFrames.AddRange(collection);
-
-            uint prev = 0, next = 0;
-            foreach (IFrame item in localFrames)
-            {
-                if (prev < (next = item.Milliseconds))
-                {
-                    var s = 5;
-                }
-                prev =next;
-            }
 
             foreach (IFrame frame in collection)
             {
@@ -107,32 +99,55 @@ namespace SL3Reader
                 throw new InvalidDataException("Unsupported file type. Expected type SL3.");
         }
 
-        public unsafe void ExportToCSV(string path, bool reuseFrames = false)
+        public unsafe void ExportToCSV(string path, bool reuseFrames = false, SurveyType? filter = null)
         {
-            const string CSVHeader = "SurveyType,WaterDepth,Longitude,Lattitude,GNSSAltitude,GNSSHeading,GNSSSpeed,MagneticHeading,MinRange,MaxRange,WaterTemperature,WaterSpeed,HardwareTime,Frequency,Milliseconds";
+            // StreamWriter is set to ASCII. If you add non-ASCII chars, revert to UTF-8.
+            const string CSVHeader = "DateTime,SurveyType,WaterDepth,Longitude,Lattitude,GNSSAltitude,GNSSHeading,GNSSSpeed,MagneticHeading,MinRange,MaxRange,WaterTemperature,WaterSpeed,HardwareTime,Frequency,Milliseconds";
 
-            using StreamWriter streamWriter = File.CreateText(path);
+            IEnumerable<IFrame> collection =
+            reuseFrames && frames is null ?
+                Frames : this;
+
+
+            FileStreamOptions fileStreamOptions = new() { Access = FileAccess.Write, Mode = FileMode.OpenOrCreate, Share = FileShare.Read, Options = FileOptions.SequentialScan };
+            using StreamWriter streamWriter = new(path, System.Text.Encoding.ASCII, fileStreamOptions);// Delay file open
             streamWriter.WriteLine(CSVHeader);
 
-            if (reuseFrames && frames is null)
+            if (filter is SurveyType internalFilter)
             {
-                foreach (IFrame frame in Frames)
+                if (frames is null)
                 {
-                    streamWriter.WriteLine(frame.ToString()); // Write & WriteLine call the same
-                    //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
-                    // so ading the '\n' manually has no effect just causing platform dependent issues. 
+                    foreach (IFrame frame in collection)
+                    {
+                        if (frame.SurveyType == internalFilter)
+                            streamWriter.WriteLine(frame.ToString()); // Write & WriteLine call the same
+                                                                      //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
+                                                                      // so ading the '\n' manually has no effect just causing platform dependent issues. 
+                    }
+                }
+                else
+                {
+                    List<IFrame> typeList = indexByType[internalFilter];
+                    int count = typeList.Count;
+
+                    for (int i = 0; i < count; i++)
+                    {
+                        streamWriter.WriteLine(typeList[i].ToString()); // Write & WriteLine call the same
+                                                                        //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
+                                                                        // so ading the '\n' manually has no effect just causing platform dependent issues. 
+                    }
                 }
             }
             else
             {
-                foreach (IFrame frame in this)
+                foreach (IFrame frame in collection)
                 {
-                    // Write & WriteLine call the same
-                    //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
-                    // so ading the '\n' manually has no effect just causing platform dependent issues. 
-                    streamWriter.WriteLine(frame.ToString());
+                    streamWriter.WriteLine(frame.ToString()); // Write & WriteLine call the same
+                                                              //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
+                                                              // so ading the '\n' manually has no effect just causing platform dependent issues. 
                 }
             }
+
             streamWriter.Close();
         }
 
@@ -141,7 +156,7 @@ namespace SL3Reader
             int i = 0;
             int frameCount = frames.Count;
             float previousRange = frames[0].MaxRange;
-            List<int> breakpoints = new(512) { 0 };
+            List<int> breakpoints = new(frameCount / 300) { 0 }; // ~300 emipirical guess.
 
             for (; i < frameCount; i++)
             {
@@ -191,26 +206,24 @@ namespace SL3Reader
             for (int i = 0; i < breakpoints.Count - 1; i += 2)
             {
                 int final = breakpoints[1 + i], first = breakpoints[i];
-                BitmapHelper.UpdateBuffer(buffer, final - first, width,
-                out int fullStride,
-                out Span<byte> fullBuffer,
-                out Span<byte> dataBuffer);
+                BitmapHelper.UpdateBuffer(
+                    buffer, final - first, width,
+                    out int fullStride,
+                    out Span<byte> fileBuffer,
+                    out Span<byte> imageBuffer);
 
-                int k = 0;
-                for (int j = first; j < final; j++)
+                for (int j = first, k = 0; j < final; j++)
                 {
                     long dataOffset = sideScanFrames[j].DataOffset;
                     if (Seek(dataOffset, SeekOrigin.Begin) != dataOffset)
-                    {
                         throw new IOException("Unable to seek.");
-                    }
 
-                    ReadExactly(dataBuffer.Slice(k++ * fullStride, width));
+                    ReadExactly(imageBuffer.Slice(fullStride * k++, width));
                 }
 
-                using FileStream stream = File.OpenWrite(Path.Combine(path, $"SS_{final}.bmp"));
-                stream.Write(fullBuffer);
-                stream.Close();
+                using SafeFileHandle handle = File.OpenHandle(Path.Combine(path, $"SS_{final}.bmp"),
+                    FileMode.CreateNew, FileAccess.Write, FileShare.None, FileOptions.SequentialScan);
+                RandomAccess.Write(handle, fileBuffer, 0);
             }
         }
 

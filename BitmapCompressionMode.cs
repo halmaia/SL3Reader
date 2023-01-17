@@ -1,6 +1,6 @@
 ﻿namespace SL3Reader
 {
-    public enum BitmapCompressionMode : uint
+    internal enum BitmapCompressionMode : uint
     {
         BI_RGB = 0,
         BI_RLE8 = 1,

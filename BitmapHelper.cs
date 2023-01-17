@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace SL3Reader
 {
@@ -9,7 +10,7 @@ namespace SL3Reader
                             BitmapInfoHeader.Size +
                             256 * Bgra.Size; // 1078.
 
-        private static readonly byte[] basicImageBuffer = new byte[BitmapCombinedHeaderSize]
+        private static readonly byte[] imageFileHeader = new byte[BitmapCombinedHeaderSize]
 
         {
             0,0,0,0,0,0,0,0,0,0,
@@ -20,7 +21,7 @@ namespace SL3Reader
             0,0,0,0,0,0,0,0,0,0,
             0,0,0,0,0,0,0,0,0,0, /* BitmapInfoHeader part, */
 
-            27,27,27,0, /* 1st color */
+            27,27,27,0, /* 1st color  in Palette*/
             37,37,47,0,
             39,39,53,0,
             37,38,57,0,
@@ -275,36 +276,34 @@ namespace SL3Reader
             56,187,240,0,
             56,187,240,0,
             56,187,240,0,
-            56,187,240,0 /* Palette */
+            56,187,240,0 /* End Palette */
        };
 
         public static byte[] CreateBuffer(int maxHeight, int maxWidth)
         {
             // (maxHeight * (maxWidth + (4 - maxWidth % 4))));
             byte[] buffer = GC.AllocateUninitializedArray<byte>(
-                BitmapCombinedHeaderSize +
-                maxHeight * maxWidth);
-            Buffer.BlockCopy(basicImageBuffer, 0, buffer, 0, BitmapCombinedHeaderSize);
+                            BitmapCombinedHeaderSize +
+                            maxHeight * maxWidth, true); // Pinned to prevent re-pining 
+            Buffer.BlockCopy(imageFileHeader, 0, buffer, 0, BitmapCombinedHeaderSize);
             return buffer;
         }
 
         public static unsafe void UpdateBuffer(byte[] buffer,
             int height, int width,
             out int fullStride,
-            out Span<byte> imageFile,
+            out Span<byte> fileBuffer,
             out Span<byte> pixelData)
         {
             fullStride = width; //width + (4 - (width % 4));
-            int fileSize;
-            fixed (byte* pBuffer = buffer)
+            fixed (byte* pBuffer = &buffer[0]) // Just formal: buffer is pre-pinned by the GC.
             {
-                BitmapFileHeader* fileHeader = (BitmapFileHeader*)pBuffer;
-                *fileHeader = new(width, height);
-                fileSize = (int)fileHeader->FileSize;
-                *(BitmapInfoHeader*)(pBuffer + BitmapFileHeader.Size) = new(width, height);
+                BitmapFileHeader* pFileHeader = (BitmapFileHeader*)pBuffer;
+                int fileSize = (int)pFileHeader->Update(width, height);
+                ((BitmapInfoHeader*)(pBuffer + BitmapFileHeader.Size))->Update (width, height);
+                fileBuffer = new Span<byte>(pBuffer, fileSize);
+                pixelData = fileBuffer[BitmapCombinedHeaderSize..];
             }
-            imageFile = new Span<byte>(buffer, 0, fileSize);
-            pixelData = imageFile[BitmapCombinedHeaderSize..];
         }
     }
 }
