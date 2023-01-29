@@ -1,18 +1,12 @@
-﻿using Microsoft.Win32.SafeHandles;
-using System;
-using System.Buffers;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
-using System.Linq;
-using System.Net;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Threading;
 using static System.Runtime.InteropServices.NativeMemory;
+using Microsoft.Win32.SafeHandles;
 
 namespace SL3Reader
 {
@@ -351,21 +345,26 @@ namespace SL3Reader
             streamWriter.Close();
         }
 
-        internal void UpdateCoordinates()
+        internal void AugmentTrajectory()
         {
             using StreamWriter streamWriter = File.CreateText(@"F:\ox.csv");
             streamWriter.WriteLine("X,Y");
 
-            (double x, double y, double v, double t, double d) = Frames[0].UnpackNavParameters();
+            int frameCount = Frames.Count; // Initialize the frames.
+            if (frameCount < 1) return;
+
+            (double x, double y, double v, double t, double d) =
+                Frames[0].UnpackNavParameters();
             streamWriter.WriteLine(x.ToString() + "," + y.ToString());
-            for (int i = 1; i < Frames.Count; i++)
+            for (int i = 1; i < frameCount; i++)
             {
                 const double lim = 1.2d;
-                const double gyk = 1.4326d;
+                const double gyk = 1.4326d; // Emirical
                 IFrame frame = Frames[i];
-                (double nx, double ny, double nv, double nt, double nd) = frame.UnpackNavParameters();
-                double sv = nv + nv, av = .5d * sv, ad = (nv * nd + v * d) / sv, dt = nt - t;
-                double vec = gyk * av * dt;
+                (double nx, double ny, double nv, double nt, double nd) =
+                    frame.UnpackNavParameters();
+                double sv = nv + nv, dt = nt - t;
+                double vec = gyk * .5d * sv * dt, ad = (nv * nd + v * d) / sv;
                 (double Sin, double Cos) = double.SinCos(ad);
 
                 y = double.FusedMultiplyAdd(vec, Sin, y);
@@ -387,9 +386,7 @@ namespace SL3Reader
                 }
                 streamWriter.WriteLine(x.ToString() + "," + y.ToString());
             }
-
         }
-
 
         #region Enumerator support
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
