@@ -7,8 +7,10 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Threading;
 using static System.Runtime.InteropServices.NativeMemory;
 
@@ -206,7 +208,7 @@ namespace SL3Reader
 
             byte[] buffer = BitmapHelper.CreateBuffer(maxHeight, numberOfColumns);
 
-            for (int i = 0, maxIndex = breakpoints.Count - 1; i < maxIndex; i ++)
+            for (int i = 0, maxIndex = breakpoints.Count - 1; i < maxIndex; i++)
             {
                 int first = breakpoints[i], final = breakpoints[1 + i];
                 BitmapHelper.UpdateBuffer(
@@ -349,6 +351,46 @@ namespace SL3Reader
             streamWriter.Close();
         }
 
+        internal void UpdateCoordinates()
+        {
+            using StreamWriter streamWriter = File.CreateText(@"F:\ox.csv");
+            streamWriter.WriteLine("X,Y");
+
+            (double x, double y, double v, double t, double d) = Frames[0].UnpackNavParameters();
+            streamWriter.WriteLine(x.ToString() + "," + y.ToString());
+            for (int i = 1; i < Frames.Count; i++)
+            {
+                const double lim = 1.2d;
+                const double gyk = 1.4326d;
+                IFrame frame = Frames[i];
+                (double nx, double ny, double nv, double nt, double nd) = frame.UnpackNavParameters();
+                double sv = nv + nv, av = .5d * sv, ad = (nv * nd + v * d) / sv, dt = nt - t;
+                double vec = gyk * av * dt;
+                (double Sin, double Cos) = double.SinCos(ad);
+
+                y = double.FusedMultiplyAdd(vec, Sin, y);
+                x = double.FusedMultiplyAdd(vec, Cos, x);
+                t = nt;
+                v = nv;
+                d = nd;
+
+                if (frame.SurveyType is SurveyType.Primary or SurveyType.Secondary or
+                    SurveyType.Unknown7 or SurveyType.Unknown8)
+                {
+                    double dy = y - ny;
+                    if (double.Abs(dy) > lim)
+                        y = ny + double.CopySign(lim, dy);
+
+                    double dx = x - nx;
+                    if (double.Abs(dx) > lim)
+                        x = nx + double.CopySign(lim, dx);
+                }
+                streamWriter.WriteLine(x.ToString() + "," + y.ToString());
+            }
+
+        }
+
+
         #region Enumerator support
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private IEnumerator<IFrame> GetSL3Enumerator() =>
@@ -359,6 +401,7 @@ namespace SL3Reader
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         IEnumerator IEnumerable.GetEnumerator() => GetSL3Enumerator();
+
         public readonly struct Enumerator : IEnumerator<IFrame>, IEnumerator
         {
             private readonly SL3Reader source;

@@ -77,6 +77,10 @@ namespace SL3Reader
         #region Search support
         bool GetNearest3DFrame(List<IFrame> candidates, out IFrame? frame3D);
         #endregion Search support
+
+        #region Unpack support
+        (double x, double y, double v, double t, double d) UnpackNavParameters();
+        #endregion Unpack support
     }
 
     [StructLayout(LayoutKind.Explicit, Size = ExtendedSize)]
@@ -252,5 +256,12 @@ namespace SL3Reader
                 FrameType.ToString()
             });
         #endregion String generation
+
+        #region Unpack support
+        public (double x, double y, double v, double t, double d) UnpackNavParameters()
+        {
+            return (X, Y, (1825d / 3600d) * GNSSSpeed, Milliseconds / 1000d, (double.Pi / 2d) - GNSSHeading);
+        }
+        #endregion Unpack support
     }
 }
