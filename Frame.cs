@@ -105,9 +105,7 @@ namespace SL3Reader
         [field: FieldOffset(28)] public readonly float UnknownAt28 { get; } // (28)
         [field: FieldOffset(32)] public readonly float UnknownAt32 { get; } // (32)
         [field: FieldOffset(36)] public readonly float UnknownAt36 { get; } // (36)
-
         [field: FieldOffset(40)] public readonly uint HardwareTime { get; } // (40)
-
         [field: FieldOffset(44)] public readonly uint LengthOfEchoData { get; } // (44)
         [field: FieldOffset(48)] public readonly float WaterDepth { get; } // (48)
         [field: FieldOffset(52)] public readonly Frequency Frequency { get; } // (52)
@@ -119,15 +117,16 @@ namespace SL3Reader
         [field: FieldOffset(72)] public readonly float UnknownAt72 { get; } // (72)
         [field: FieldOffset(76)] public readonly float UnknownAt76 { get; } // (76)
         [field: FieldOffset(80)] public readonly float UnknownAt80 { get; } // (80)
-
         [field: FieldOffset(84)] public readonly float GNSSSpeed { get; } // (84)
         [field: FieldOffset(88)] public readonly float WaterTemperature { get; }  // (88)
-
         [field: FieldOffset(92)] public readonly int X { get; } // (92)
         [field: FieldOffset(96)] public readonly int Y { get; } // (96)
-
         [field: FieldOffset(100)] public readonly float WaterSpeed { get; } // (100)
-
+        /// <summary>
+        /// Heading of the vessel, calculation based on GNSS readings only.
+        /// (No drift was taken into account.) Unit: radians. Direction: azimuthal (↻⁻;
+        /// north is zero or 2·π, east is π/2.)
+        /// </summary>
         [field: FieldOffset(104)] public readonly float GNSSHeading { get; } // (104)
         [field: FieldOffset(108)] public readonly float GNSSAltitude { get; } // (108)
         [field: FieldOffset(112)] public readonly float MagneticHeading { get; } // (112)
@@ -260,7 +259,14 @@ namespace SL3Reader
         #region Unpack support
         public (double x, double y, double v, double t, double d) UnpackNavParameters()
         {
-            return (X, Y, (1825d / 3600d) * GNSSSpeed, Milliseconds / 1000d, (double.Pi / 2d) - GNSSHeading);
+            const double KnotsToMPS = 1852d / 3600d;
+            const double HalfPI = double.Pi / 2d;
+            const double MillisecondsToSeconds = 1d / 1000d;
+
+            return (X, Y,
+                    KnotsToMPS * GNSSSpeed,
+                    MillisecondsToSeconds * Milliseconds,
+                    HalfPI - GNSSHeading);
         }
         #endregion Unpack support
     }

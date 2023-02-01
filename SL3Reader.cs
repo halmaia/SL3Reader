@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using static System.Runtime.InteropServices.NativeMemory;
 using Microsoft.Win32.SafeHandles;
+using System.Numerics;
 
 namespace SL3Reader
 {
@@ -54,6 +55,16 @@ namespace SL3Reader
         public IFrame this[int index] => Frames[index]; // Can't be readonly hence the Frames could be initialized.
 
         #endregion Frame support
+
+        #region Augmented Coordinates
+        private List<Vector2> augmentedCoordinates;
+        public List<Vector2> AugmentedCoordinates => augmentedCoordinates ??= CreateNewCoordinateList();
+        private List<Vector2> CreateNewCoordinateList()
+        {
+            const long averageFrameSize = 2118L; // Empirically set value to avoid frequent resize of the underlying array.
+            return new((int)(Length / averageFrameSize));
+        }
+        #endregion Augmented Coordinates
 
         #region Indices
         private SortedDictionary<SurveyType, List<IFrame>> indexByType;
@@ -347,28 +358,29 @@ namespace SL3Reader
 
         internal void AugmentTrajectory()
         {
-            using StreamWriter streamWriter = File.CreateText(@"F:\ox.csv");
-            streamWriter.WriteLine("X,Y");
+            const double lim = 1.2d;
+            const double C = 1.4326d; // Emirical
+
+            List<Vector2> crds = AugmentedCoordinates;
 
             int frameCount = Frames.Count; // Initialize the frames.
             if (frameCount < 1) return;
 
             (double x, double y, double v, double t, double d) =
                 Frames[0].UnpackNavParameters();
-            streamWriter.WriteLine(x.ToString() + "," + y.ToString());
+            crds.Add(new((float)x, (float)y));
+
             for (int i = 1; i < frameCount; i++)
             {
-                const double lim = 1.2d;
-                const double gyk = 1.4326d; // Emirical
                 IFrame frame = Frames[i];
                 (double nx, double ny, double nv, double nt, double nd) =
                     frame.UnpackNavParameters();
-                double sv = nv + nv, dt = nt - t;
-                double vec = gyk * .5d * sv * dt, ad = (nv * nd + v * d) / sv;
-                (double Sin, double Cos) = double.SinCos(ad);
+                double sv = v + nv, dt = nt - t;
+                double vec = C * .5d * sv * dt, ad = (nv * nd + v * d) / sv;
+                (double sin, double cos) = double.SinCos(ad);
 
-                y = double.FusedMultiplyAdd(vec, Sin, y);
-                x = double.FusedMultiplyAdd(vec, Cos, x);
+                y = double.FusedMultiplyAdd(vec, sin, y);
+                x = double.FusedMultiplyAdd(vec, cos, x);
                 t = nt;
                 v = nv;
                 d = nd;
@@ -384,7 +396,7 @@ namespace SL3Reader
                     if (double.Abs(dx) > lim)
                         x = nx + double.CopySign(lim, dx);
                 }
-                streamWriter.WriteLine(x.ToString() + "," + y.ToString());
+                crds.Add(new((float)x, (float)y));
             }
         }
 
