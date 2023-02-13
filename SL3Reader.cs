@@ -450,6 +450,11 @@ namespace SL3Reader
                 Frame* currentFrame = pCurrent;
                 SL3Reader stream = source;
 
+                //Test
+                //stream.Seek(121571091, SeekOrigin.Begin);
+                //stream.Read(new(currentFrame, Frame.ExtendedSize));
+                //End test
+
                 // We read always the extended size!
                 return stream.Read(new(currentFrame, Frame.ExtendedSize)) == Frame.ExtendedSize && // If false: unable to read. It could be due to EOF or IO error.
                        stream.Seek(currentFrame->LengthOfFrame - Frame.ExtendedSize, SeekOrigin.Current) < fileLength; // If false: Avoid returning non-complete frame.

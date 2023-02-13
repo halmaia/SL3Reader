@@ -19,7 +19,7 @@ namespace SL3Reader
         ushort LengthOfFrame { get; }
         ushort PreviousFrameLength { get; }
         SurveyType SurveyType { get; }
-        short UnknownAt14 { get; }
+        short PackingAt14 { get; }
         uint CampaignID { get; }
         float MinRange { get; }
         float MaxRange { get; }
@@ -30,9 +30,9 @@ namespace SL3Reader
         uint LengthOfEchoData { get; }
         float WaterDepth { get; }
         Frequency Frequency { get; }
-        float UnknownAt54 { get; }
-        float UnknownAt58 { get; }
-        short UnknownAt62 { get; }
+        ushort PackingAt54 { get; }
+        float UnknownAt56 { get; }
+        float UnknownAt60 { get; }
         float UnknownAt64 { get; }
         float UnknownAt68 { get; }
         float UnknownAt72 { get; }
@@ -47,8 +47,8 @@ namespace SL3Reader
         float GNSSAltitude { get; }
         float MagneticHeading { get; }
         DataValidity Flags { get; }
-        float UnknownAt118 { get; }
-        ushort UnknownAt122 { get; }
+        ushort PackingAt118 { get; }
+        uint UnknownAt120 { get; }
         uint Milliseconds { get; }
         long DataOffset { get; } // Generated
         #endregion Basic Properties
@@ -98,7 +98,7 @@ namespace SL3Reader
         [field: FieldOffset(8)] public readonly ushort LengthOfFrame { get; } // (8)
         [field: FieldOffset(10)] public readonly ushort PreviousFrameLength { get; } // (10)
         [field: FieldOffset(12)] public readonly SurveyType SurveyType { get; } // (12)
-        [field: FieldOffset(14)] public readonly short UnknownAt14 { get; } // (14) Always 0 for me.
+        [field: FieldOffset(14)] public readonly short PackingAt14 { get; } // (14) Always 0 for me.
         [field: FieldOffset(16)] public readonly uint CampaignID { get; } // (16)
         [field: FieldOffset(20)] public readonly float MinRange { get; } // (20)
         [field: FieldOffset(24)] public readonly float MaxRange { get; } // (24)
@@ -109,9 +109,9 @@ namespace SL3Reader
         [field: FieldOffset(44)] public readonly uint LengthOfEchoData { get; } // (44)
         [field: FieldOffset(48)] public readonly float WaterDepth { get; } // (48)
         [field: FieldOffset(52)] public readonly Frequency Frequency { get; } // (52)
-        [field: FieldOffset(54)] public readonly float UnknownAt54 { get; } // (54)
-        [field: FieldOffset(58)] public readonly float UnknownAt58 { get; } // (58)
-        [field: FieldOffset(62)] public readonly short UnknownAt62 { get; } // (62)
+        [field: FieldOffset(54)] public readonly ushort PackingAt54 { get; } // (54)
+        [field: FieldOffset(56)] public readonly float UnknownAt56 { get; } // (56)
+        [field: FieldOffset(60)] public readonly float UnknownAt60 { get; } // (60)
         [field: FieldOffset(64)] public readonly float UnknownAt64 { get; } // (64)
         [field: FieldOffset(68)] public readonly float UnknownAt68 { get; } // (68)
         [field: FieldOffset(72)] public readonly float UnknownAt72 { get; } // (72)
@@ -132,8 +132,8 @@ namespace SL3Reader
         [field: FieldOffset(112)] public readonly float MagneticHeading { get; } // (112)
 
         [field: FieldOffset(116)] public readonly DataValidity Flags { get; } // (116)
-        [field: FieldOffset(118)] public readonly float UnknownAt118 { get; } // (118)
-        [field: FieldOffset(122)] public readonly ushort UnknownAt122 { get; } // (122)
+        [field: FieldOffset(118)] public readonly ushort PackingAt118 { get; } // (118)
+        [field: FieldOffset(120)] public readonly uint UnknownAt120 { get; } // (120)
         [field: FieldOffset(124)] public readonly uint Milliseconds { get; } // (124)
 
         public readonly long DataOffset => PositionOfFirstByte + (FrameType is FrameType.Extended ? ExtendedSize : BasicSize);
