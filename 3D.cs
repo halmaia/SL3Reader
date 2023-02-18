@@ -1,5 +1,4 @@
-﻿using System;
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace SL3Reader
 {
@@ -28,9 +27,9 @@ namespace SL3Reader
         public readonly int UnknownAt68 { get; }
         public readonly int UnknownAt72 { get; }
 
-        public int NumberOfUsedBytes => NumberOfLeftBytes +
-                                        NumberOfRightBytes + 
-                                        NumberOfUnreliableBytes;
+        public readonly int NumberOfUsedBytes => NumberOfLeftBytes +
+                                                 NumberOfRightBytes + 
+                                                 NumberOfUnreliableBytes;
 
     }
 

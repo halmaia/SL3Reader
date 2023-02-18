@@ -9,6 +9,8 @@ using static System.Runtime.InteropServices.NativeMemory;
 using Microsoft.Win32.SafeHandles;
 using System.Numerics;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Diagnostics.Metrics;
 
 namespace SL3Reader
 {
@@ -37,16 +39,16 @@ namespace SL3Reader
             InitIndexSupport(localFrames.Capacity);
 
             SortedDictionary<SurveyType, List<IFrame>> typeIndex = indexByType;
-            SortedDictionary<uint, List<IFrame>> camapignIndex = indexByCampaign;
+            SortedDictionary<uint, List<IFrame>> campaignIndex = indexByCampaign;
 
             foreach (IFrame frame in collection)
             {
                 localFrames.Add(frame);
                 typeIndex[frame.SurveyType].Add(frame);
-                if (camapignIndex.TryGetValue(frame.CampaignID, out List<IFrame> camapignList))
-                    camapignList.Add(frame);
+                if (campaignIndex.TryGetValue(frame.CampaignID, out List<IFrame> campaignList))
+                    campaignList.Add(frame);
                 else
-                    camapignIndex.Add(frame.CampaignID, new List<IFrame>(9) { frame });
+                    campaignIndex.Add(frame.CampaignID, new List<IFrame>(9) { frame });
             }
             return localFrames;
         }
@@ -113,7 +115,7 @@ namespace SL3Reader
         public unsafe void ExportToCSV(string path, SurveyType? filter = null)
         {
             // StreamWriter is set to ASCII. If you add non-ASCII chars, revert to UTF-8.
-            const string CSVHeader = "DateTime,SurveyType,WaterDepth,Longitude,Lattitude,GNSSAltitude,GNSSHeading,GNSSSpeed,MagneticHeading,MinRange,MaxRange,WaterTemperature,WaterSpeed,HardwareTime,Frequency,Milliseconds,AugmentedX,AugmentedY";
+            const string CSVHeader = "DateTime,SurveyType,WaterDepth,Longitude,Latitude,GNSSAltitude,GNSSHeading,GNSSSpeed,MagneticHeading,MinRange,MaxRange,WaterTemperature,WaterSpeed,HardwareTime,Frequency,Milliseconds,AugmentedX,AugmentedY";
 
 
             FileStreamOptions fileStreamOptions = new() { Access = FileAccess.Write, Mode = FileMode.OpenOrCreate, Share = FileShare.Read, Options = FileOptions.SequentialScan };
@@ -139,21 +141,20 @@ namespace SL3Reader
                     GeoPoint augmentedCoordinate = AugmentedCoordinates[i];
                     streamWriter.WriteLine(Frames[i].ToString() + ',' +
                                            augmentedCoordinate.ToString());
-                                            // Write & WriteLine call the same
-                                            //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
-                                            // so adding the '\n' manually has no effect just causing platform dependent issues.                                                                               // so ading the '\n' manually has no effect just causing platform dependent issues. 
+                    // Write & WriteLine call the same
+                    //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
+                    // so adding the '\n' manually has no effect just causing platform dependent issues.                                                                               // so ading the '\n' manually has no effect just causing platform dependent issues. 
                 }
             }
-
             streamWriter.Close();
         }
 
-        private static List<int> GetBreakPoints(List<IFrame> frames, out int contigousLength)
+        private static List<int> GetBreakPoints(List<IFrame> frames, out int contiguousLength)
         {
             int i = 0;
             int frameCount = frames.Count;
             float previousRange = frames[0].MaxRange;
-            List<int> breakpoints = new(frameCount / 300) { 0 }; // ~300 emipirical guess.
+            List<int> breakpoints = new(frameCount / 300) { 0 }; // ~300 empirical guess.
 
             for (; i < frameCount; i++)
             {
@@ -168,7 +169,7 @@ namespace SL3Reader
             if (breakpoints[^1] != (i -= 1))
                 breakpoints.Add(i); // There was no change in the range, so we have to add the last one.
 
-            contigousLength = 0;
+            contiguousLength = 0;
 
             for (int j = 0,
                  maxIndex = breakpoints.Count - 1,
@@ -176,8 +177,8 @@ namespace SL3Reader
                  j < maxIndex;
                  j += 2)
             {
-                if (contigousLength < (delta = breakpoints[1 + j] - breakpoints[j]))
-                    contigousLength = delta;
+                if (contiguousLength < (delta = breakpoints[1 + j] - breakpoints[j]))
+                    contiguousLength = delta;
             }
 
             return breakpoints;
@@ -289,13 +290,13 @@ namespace SL3Reader
 
             ThreeDimensionalFrameHeader header = new();
             Span<byte> sHeader = new(&header, ThreeDimensionalFrameHeader.Size);
-            byte* measurements = stackalloc byte[400 * InterferometricMeasuement.Size],
+            byte* measurements = stackalloc byte[400 * InterferometricMeasurement.Size],
                   reset = measurements;
 
             for (int i = 0; i < frames3DLength; i++)
             {
                 IFrame frame = frames3D[i];
-                var offset = frame.DataOffset;
+                long offset = frame.DataOffset;
                 if (Seek(offset, SeekOrigin.Begin) != offset)
                     throw new IOException("Unable to seek!");
 
@@ -303,26 +304,44 @@ namespace SL3Reader
 
                 ReadExactly(new(measurements, header.NumberOfUsedBytes));
 
+                uint campaignID = frame.CampaignID;
+                double centralX = frame.X, centralY = frame.Y, centralZ = .3048 * frame.GNSSAltitude;
+                (double sin, double cos) = double.SinCos(frame.GNSSHeading - .5 * double.Pi);
+
+                // Left side
                 byte* limit = measurements + header.NumberOfLeftBytes;
-                for (; measurements < limit; measurements += InterferometricMeasuement.Size)
+                for (; measurements < limit; measurements += InterferometricMeasurement.Size)
                 {
-                    InterferometricMeasuement* measurement = (InterferometricMeasuement*)measurements;
-                    streamWriter.WriteLine($"{-measurement->Delta},{i},{measurement->Depth},R");
+                    InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
+
+                    double delta = -.3048 * measurement->Delta;
+                    double x = double.FusedMultiplyAdd(delta, sin, centralX);
+                    double y = double.FusedMultiplyAdd(delta, cos, centralY);
+                    double z = double.FusedMultiplyAdd(-.3048, measurement->Depth, centralZ);
+
+                    streamWriter.WriteLine($"{campaignID},{x},{y},{z},R");
                 }
 
+                // Right side
                 limit = measurements + header.NumberOfRightBytes;
-                for (; measurements < limit; measurements += InterferometricMeasuement.Size)
+                for (; measurements < limit; measurements += InterferometricMeasurement.Size)
                 {
-                    InterferometricMeasuement* measurement = (InterferometricMeasuement*)measurements;
-                    streamWriter.WriteLine($"{measurement->Delta},{i},{measurement->Depth},R");
+                    InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
+
+                    double delta = .3048 * measurement->Delta;
+                    double x = double.FusedMultiplyAdd(delta, sin, centralX);
+                    double y = double.FusedMultiplyAdd(delta, cos, centralY);
+                    double z = double.FusedMultiplyAdd(-.3048, measurement->Depth, centralZ);
+
+                    streamWriter.WriteLine($"{campaignID},{x},{y},{z},R");
                 }
 
                 if (includeUnreliable)
                 {
                     limit = measurements + header.NumberOfUnreliableLeftBytes;
-                    for (; measurements < limit; measurements += InterferometricMeasuement.Size)
+                    for (; measurements < limit; measurements += InterferometricMeasurement.Size)
                     {
-                        InterferometricMeasuement* measurement = (InterferometricMeasuement*)measurements;
+                        InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
                         float delta = measurement->Delta;
                         if (delta is < 0.001f or > 5000.0f) continue;
                         float depth = measurement->Depth;
@@ -332,9 +351,9 @@ namespace SL3Reader
                     }
 
                     limit = measurements + header.NumberOfUnreliableRightBytes;
-                    for (; measurements < limit; measurements += InterferometricMeasuement.Size)
+                    for (; measurements < limit; measurements += InterferometricMeasurement.Size)
                     {
-                        InterferometricMeasuement* measurement = (InterferometricMeasuement*)measurements;
+                        InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
                         float delta = measurement->Delta;
                         if (delta is < 0.001f or > 5000.0f) continue;
                         float depth = measurement->Depth;
@@ -354,14 +373,14 @@ namespace SL3Reader
             const double lim = 1.2d;
             const double C = 1.4326d; // Empirical
 
-            List<GeoPoint> coords = AugmentedCoordinates;
+            List<GeoPoint> coordinates = AugmentedCoordinates;
 
             int frameCount = Frames.Count; // Initialize the frames.
             if (frameCount < 1) return;
 
             (double x, double y, double v, double t, double d) =
                 Frames[0].UnpackNavParameters();
-            coords.Add(new(x, y));
+            coordinates.Add(new(x, y, d, 0));
 
             for (int i = 1; i < frameCount; i++)
             {
@@ -389,7 +408,7 @@ namespace SL3Reader
                     if (double.Abs(dx) > lim)
                         x = nx + double.CopySign(lim, dx);
                 }
-                coords.Add(new(x, y));
+                coordinates.Add(new(x, y, ad, 0));
             }
         }
 
