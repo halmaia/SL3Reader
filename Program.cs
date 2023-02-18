@@ -31,8 +31,9 @@ namespace SL3Reader
             //sl3reader.ExamineUnknown8Datasets();
             //sl3reader.Export3D(output);
             //sl3reader.ExportImagery(@"F:\SS\", SurveyType.DownScan);
-            sl3reader.AugmentTrajectory();
-            sl3reader.ExportToCSV(output, false);
+            
+
+            sl3reader.ExportToCSV(output);
         }
     }
 }

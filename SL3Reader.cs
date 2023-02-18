@@ -8,6 +8,7 @@ using System.Threading;
 using static System.Runtime.InteropServices.NativeMemory;
 using Microsoft.Win32.SafeHandles;
 using System.Numerics;
+using System.Globalization;
 
 namespace SL3Reader
 {
@@ -57,9 +58,9 @@ namespace SL3Reader
         #endregion Frame support
 
         #region Augmented Coordinates
-        private List<Vector2> augmentedCoordinates;
-        public List<Vector2> AugmentedCoordinates => augmentedCoordinates ??= CreateNewCoordinateList();
-        private List<Vector2> CreateNewCoordinateList()
+        private List<GeoPoint> augmentedCoordinates;
+        public List<GeoPoint> AugmentedCoordinates => augmentedCoordinates ??= CreateNewCoordinateList();
+        private List<GeoPoint> CreateNewCoordinateList()
         {
             const long averageFrameSize = 2118L; // Empirically set value to avoid frequent resize of the underlying array.
             return new((int)(Length / averageFrameSize));
@@ -105,16 +106,15 @@ namespace SL3Reader
 
             if (!fileHeader.IsValidFormat(LogFileFormat.SL3))
                 throw new InvalidDataException("Unsupported file type. Expected type SL3.");
+
+            AugmentTrajectory();
         }
 
-        public unsafe void ExportToCSV(string path, bool reuseFrames = false, SurveyType? filter = null)
+        public unsafe void ExportToCSV(string path, SurveyType? filter = null)
         {
             // StreamWriter is set to ASCII. If you add non-ASCII chars, revert to UTF-8.
-            const string CSVHeader = "DateTime,SurveyType,WaterDepth,Longitude,Lattitude,GNSSAltitude,GNSSHeading,GNSSSpeed,MagneticHeading,MinRange,MaxRange,WaterTemperature,WaterSpeed,HardwareTime,Frequency,Milliseconds";
+            const string CSVHeader = "DateTime,SurveyType,WaterDepth,Longitude,Lattitude,GNSSAltitude,GNSSHeading,GNSSSpeed,MagneticHeading,MinRange,MaxRange,WaterTemperature,WaterSpeed,HardwareTime,Frequency,Milliseconds,AugmentedX,AugmentedY";
 
-            IEnumerable<IFrame> collection =
-            reuseFrames && frames is null ?
-                Frames : this;
 
             FileStreamOptions fileStreamOptions = new() { Access = FileAccess.Write, Mode = FileMode.OpenOrCreate, Share = FileShare.Read, Options = FileOptions.SequentialScan };
             using StreamWriter streamWriter = new(path, System.Text.Encoding.ASCII, fileStreamOptions);// Delay file open
@@ -122,36 +122,26 @@ namespace SL3Reader
 
             if (filter is SurveyType internalFilter)
             {
-                if (frames is null)
-                {
-                    foreach (IFrame frame in collection)
-                    {
-                        if (frame.SurveyType == internalFilter)
-                            streamWriter.WriteLine(frame.ToString()); // Write & WriteLine call the same
-                                                                      //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
-                                                                      // so ading the '\n' manually has no effect just causing platform dependent issues. 
-                    }
-                }
-                else
-                {
-                    List<IFrame> typeList = indexByType[internalFilter];
-                    int count = typeList.Count;
+                List<IFrame> typeList = indexByType[internalFilter];
+                int count = typeList.Count;
 
-                    for (int i = 0; i < count; i++)
-                    {
-                        streamWriter.WriteLine(typeList[i].ToString()); // Write & WriteLine call the same
-                                                                        //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
-                                                                        // so ading the '\n' manually has no effect just causing platform dependent issues. 
-                    }
+                for (int i = 0; i < count; i++)
+                {
+                    streamWriter.WriteLine(typeList[i].ToString()); // Write & WriteLine call the same
+                                                                    //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
+                                                                    // so adding the '\n' manually has no effect just causing platform dependent issues. 
                 }
             }
             else
             {
-                foreach (IFrame frame in collection)
+                for (int i = 0, frameCount = Frames.Count; i < frameCount; i++)
                 {
-                    streamWriter.WriteLine(frame.ToString()); // Write & WriteLine call the same
-                                                              //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
-                                                              // so ading the '\n' manually has no effect just causing platform dependent issues. 
+                    GeoPoint augmentedCoordinate = AugmentedCoordinates[i];
+                    streamWriter.WriteLine(Frames[i].ToString() + ',' +
+                                           augmentedCoordinate.ToString());
+                                            // Write & WriteLine call the same
+                                            //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
+                                            // so adding the '\n' manually has no effect just causing platform dependent issues.                                                                               // so ading the '\n' manually has no effect just causing platform dependent issues. 
                 }
             }
 
@@ -277,7 +267,7 @@ namespace SL3Reader
             }
         }
 
-        public unsafe void Export3D(string path)
+        public unsafe void Export3D(string path, bool includeUnreliable = false)
         {
             ArgumentNullException.ThrowIfNull(nameof(path));
 
@@ -292,10 +282,10 @@ namespace SL3Reader
             int frames3DLength = frames3D.Count;
             if (frames3DLength < 1) return;
 
-            /// Test
-            List<IFrame> framesSS = IndexByType[SurveyType.SideScan];
-            framesSS[56].GetNearest3DFrame(frames3D, out IFrame? frm);
-            ///END Test
+            // Test
+            // List<IFrame> framesSS = IndexByType[SurveyType.SideScan];
+            //framesSS[56].GetNearest3DFrame(frames3D, out IFrame? frm);
+            // END Test
 
             ThreeDimensionalFrameHeader header = new();
             Span<byte> sHeader = new(&header, ThreeDimensionalFrameHeader.Size);
@@ -327,28 +317,31 @@ namespace SL3Reader
                     streamWriter.WriteLine($"{measurement->Delta},{i},{measurement->Depth},R");
                 }
 
-                limit = measurements + header.NumberOfUnreliableLeftBytes;
-                for (; measurements < limit; measurements += InterferometricMeasuement.Size)
+                if (includeUnreliable)
                 {
-                    InterferometricMeasuement* measurement = (InterferometricMeasuement*)measurements;
-                    float delta = measurement->Delta;
-                    if (delta is < 0.001f or > 5000.0f) continue;
-                    float depth = measurement->Depth;
-                    if (depth is < 1f or > 250.0f) continue;
+                    limit = measurements + header.NumberOfUnreliableLeftBytes;
+                    for (; measurements < limit; measurements += InterferometricMeasuement.Size)
+                    {
+                        InterferometricMeasuement* measurement = (InterferometricMeasuement*)measurements;
+                        float delta = measurement->Delta;
+                        if (delta is < 0.001f or > 5000.0f) continue;
+                        float depth = measurement->Depth;
+                        if (depth is < 1f or > 250.0f) continue;
 
-                    streamWriter.WriteLine($"{-delta},{i},{depth},U");
-                }
+                        streamWriter.WriteLine($"{-delta},{i},{depth},U");
+                    }
 
-                limit = measurements + header.NumberOfUnreliableRightBytes;
-                for (; measurements < limit; measurements += InterferometricMeasuement.Size)
-                {
-                    InterferometricMeasuement* measurement = (InterferometricMeasuement*)measurements;
-                    float delta = measurement->Delta;
-                    if (delta is < 0.001f or > 5000.0f) continue;
-                    float depth = measurement->Depth;
-                    if (depth is < 1f or > 250.0f) continue;
+                    limit = measurements + header.NumberOfUnreliableRightBytes;
+                    for (; measurements < limit; measurements += InterferometricMeasuement.Size)
+                    {
+                        InterferometricMeasuement* measurement = (InterferometricMeasuement*)measurements;
+                        float delta = measurement->Delta;
+                        if (delta is < 0.001f or > 5000.0f) continue;
+                        float depth = measurement->Depth;
+                        if (depth is < 1f or > 250.0f) continue;
 
-                    streamWriter.WriteLine($"{delta},{i},{depth},U");
+                        streamWriter.WriteLine($"{delta},{i},{depth},U");
+                    }
                 }
 
                 measurements = reset;
@@ -359,16 +352,16 @@ namespace SL3Reader
         internal void AugmentTrajectory()
         {
             const double lim = 1.2d;
-            const double C = 1.4326d; // Emirical
+            const double C = 1.4326d; // Empirical
 
-            List<Vector2> crds = AugmentedCoordinates;
+            List<GeoPoint> coords = AugmentedCoordinates;
 
             int frameCount = Frames.Count; // Initialize the frames.
             if (frameCount < 1) return;
 
             (double x, double y, double v, double t, double d) =
                 Frames[0].UnpackNavParameters();
-            crds.Add(new((float)x, (float)y));
+            coords.Add(new(x, y));
 
             for (int i = 1; i < frameCount; i++)
             {
@@ -396,7 +389,7 @@ namespace SL3Reader
                     if (double.Abs(dx) > lim)
                         x = nx + double.CopySign(lim, dx);
                 }
-                crds.Add(new((float)x, (float)y));
+                coords.Add(new(x, y));
             }
         }
 
@@ -449,11 +442,6 @@ namespace SL3Reader
             {
                 Frame* currentFrame = pCurrent;
                 SL3Reader stream = source;
-
-                //Test
-                //stream.Seek(121571091, SeekOrigin.Begin);
-                //stream.Read(new(currentFrame, Frame.ExtendedSize));
-                //End test
 
                 // We read always the extended size!
                 return stream.Read(new(currentFrame, Frame.ExtendedSize)) == Frame.ExtendedSize && // If false: unable to read. It could be due to EOF or IO error.

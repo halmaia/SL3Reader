@@ -35,7 +35,7 @@ namespace SL3Reader
     }
 
     [StructLayout(LayoutKind.Sequential, Size = Size)]
-    public readonly ref struct InterferometricMeasuement
+    public readonly ref struct InterferometricMeasurement
     {
         public const int Size = 2 * sizeof(float);
 
