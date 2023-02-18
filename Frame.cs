@@ -6,11 +6,10 @@ using System.Runtime.CompilerServices;
 using System.ComponentModel;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 
 namespace SL3Reader
 {
-    public enum FrameType : byte
-    { Basic, Extended }
     public interface IFrame
     {
         #region Basic properties
@@ -73,6 +72,11 @@ namespace SL3Reader
         #region DateTime support
         DateTime Timestamp { get; }
         #endregion DateTime support
+
+        #region WGS84
+        double Longitude { get; }
+        double Latitude { get; }
+        #endregion WGS84
 
         #region Search support
         bool GetNearest3DFrame(List<IFrame> candidates, out IFrame? frame3D);
@@ -149,16 +153,30 @@ namespace SL3Reader
         #endregion Type support
 
         #region Extended Properties
-        [field: FieldOffset(128)] public readonly uint LastPrimaryScanFrameOffset { get; } // (128)
-        [field: FieldOffset(132)] public readonly uint LastSecondaryScanFrameOffset { get; }  // (132)
-        [field: FieldOffset(136)] public readonly uint LastDownScanFrameOffset { get; }  // (136)
-        [field: FieldOffset(140)] public readonly uint LastLeftSidescanFrameOffset { get; }  // (140)
-        [field: FieldOffset(144)] public readonly uint LastRightSidescanFrameOffset { get; }  // (144)
-        [field: FieldOffset(148)] public readonly uint LastSidescanFrameOffset { get; }  // (148)
-        [field: FieldOffset(152)] public readonly uint UnknownAt152 { get; }  // (152)
-        [field: FieldOffset(156)] public readonly uint UnknownAt156 { get; }  // (156)
-        [field: FieldOffset(160)] public readonly uint UnknownAt160 { get; }  // (160)
-        [field: FieldOffset(164)] public readonly uint Last3DFrameOffset { get; }  // (164)
+        [FieldOffset(128)] private readonly uint lastPrimaryScanFrameOffset;
+        public readonly uint LastPrimaryScanFrameOffset => FrameType is FrameType.Extended ? lastPrimaryScanFrameOffset : throw new InvalidFrameTypeException(); // (128)
+        [FieldOffset(132)] private readonly uint lastSecondaryScanFrameOffset;
+        public readonly uint LastSecondaryScanFrameOffset => FrameType is FrameType.Extended ? lastSecondaryScanFrameOffset : throw new InvalidFrameTypeException();  // (132)
+        [FieldOffset(136)] public readonly uint lastDownScanFrameOffset;
+        public readonly uint LastDownScanFrameOffset => FrameType is FrameType.Extended ? lastDownScanFrameOffset : throw new InvalidFrameTypeException();  // (136)
+        [FieldOffset(140)] private readonly uint lastLeftSidescanFrameOffset;
+        public readonly uint LastLeftSidescanFrameOffset => FrameType is FrameType.Extended ? lastLeftSidescanFrameOffset : throw new InvalidFrameTypeException();  // (140)
+        [FieldOffset(144)] private readonly uint lastRightSidescanFrameOffset;
+        public readonly uint LastRightSidescanFrameOffset => FrameType is FrameType.Extended ? lastRightSidescanFrameOffset : throw new InvalidFrameTypeException();  // (144)
+
+        [FieldOffset(148)] private readonly uint lastSidescanFrameOffset;
+        public readonly uint LastSidescanFrameOffset => FrameType is FrameType.Extended ? lastSidescanFrameOffset : throw new InvalidFrameTypeException();  // (148)
+        [FieldOffset(152)] private readonly uint unknownAt152;
+        public readonly uint UnknownAt152 => FrameType is FrameType.Extended ? unknownAt152 : throw new InvalidFrameTypeException();  // (152)
+
+        [FieldOffset(156)] private readonly uint unknownAt156;
+        public readonly uint UnknownAt156 => FrameType is FrameType.Extended ? unknownAt156 : throw new InvalidFrameTypeException();  // (156)
+
+        [FieldOffset(160)] private readonly uint unknown160;
+        public readonly uint UnknownAt160 => FrameType is FrameType.Extended ? unknown160 : throw new InvalidFrameTypeException();  // (160)
+
+        [FieldOffset(164)] private readonly uint last3DFrameOffset;
+        public readonly uint Last3DFrameOffset => FrameType is FrameType.Extended ? last3DFrameOffset : throw new InvalidFrameTypeException();  // (164)
 
         #endregion Extended properties
 
@@ -227,7 +245,7 @@ namespace SL3Reader
             IFormatProvider invariantCulture = InvariantCulture;
             return string.Join(',', new string[]
         {
-            Timestamp.ToString("yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'"),
+            Timestamp.ToString("yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'", invariantCulture),
             SurveyType.ToString(),
             WaterDepth.ToString(invariantCulture),
             Longitude.ToString(invariantCulture),
