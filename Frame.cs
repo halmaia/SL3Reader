@@ -284,7 +284,7 @@ namespace SL3Reader
             return (X, Y,
                     KnotsToMPS * GNSSSpeed,
                     MillisecondsToSeconds * Milliseconds,
-                    HalfPI - GNSSHeading);
+                    Math.Tau - GNSSHeading + HalfPI);
         }
         #endregion Unpack support
     }

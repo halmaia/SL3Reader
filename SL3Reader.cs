@@ -38,24 +38,27 @@ namespace SL3Reader
             List<IFrame> localFrames = CreateNewFrameList();
             InitIndexSupport(localFrames.Capacity);
 
-            SortedDictionary<SurveyType, List<IFrame>> typeIndex = indexByType;
-            SortedDictionary<uint, List<IFrame>> campaignIndex = indexByCampaign;
+            SortedDictionary<SurveyType, List<int>> typeIndex = indexByType;
+            SortedDictionary<uint, List<int>> campaignIndex = indexByCampaign;
 
+            int n = 0;
             foreach (IFrame frame in collection)
             {
                 localFrames.Add(frame);
-                typeIndex[frame.SurveyType].Add(frame);
-                if (campaignIndex.TryGetValue(frame.CampaignID, out List<IFrame> campaignList))
-                    campaignList.Add(frame);
+                typeIndex[frame.SurveyType].Add(n);
+                if (campaignIndex.TryGetValue(frame.CampaignID, out List<int> campaignList))
+                    campaignList.Add(n);
                 else
-                    campaignIndex.Add(frame.CampaignID, new List<IFrame>(9) { frame });
+                    campaignIndex.Add(frame.CampaignID, new List<int>(9) { n });
+
+                n++;
             }
             return localFrames;
         }
 
-        public int Count => Frames.Count; // Can't be readonly hence the Frames could be initialized.
+        public int Count => Frames.Count; // Can't be read-only hence the Frames could be initialized.
 
-        public IFrame this[int index] => Frames[index]; // Can't be readonly hence the Frames could be initialized.
+        public IFrame this[int index] => Frames[index]; // Can't be read-only hence the Frames could be initialized.
 
         #endregion Frame support
 
@@ -70,11 +73,11 @@ namespace SL3Reader
         #endregion Augmented Coordinates
 
         #region Indices
-        private SortedDictionary<SurveyType, List<IFrame>> indexByType;
-        private SortedDictionary<uint, List<IFrame>> indexByCampaign;
-        public SortedDictionary<SurveyType, List<IFrame>> IndexByType => indexByType;
+        private SortedDictionary<SurveyType, List<int>> indexByType;
+        private SortedDictionary<uint, List<int>> indexByCampaign;
+        public SortedDictionary<SurveyType, List<int>> IndexByType => indexByType;
         // Maybe useless, due to the drifting in 3D.
-        public SortedDictionary<uint, List<IFrame>> IndexByCampaign => indexByCampaign;
+        public SortedDictionary<uint, List<int>> IndexByCampaign => indexByCampaign;
         private void InitIndexSupport(int estimatedCount)
         {
             indexByType = new()
@@ -124,14 +127,15 @@ namespace SL3Reader
 
             if (filter is SurveyType internalFilter)
             {
-                List<IFrame> typeList = indexByType[internalFilter];
+                List<int> typeList = indexByType[internalFilter];
                 int count = typeList.Count;
+                var frames = Frames;
 
                 for (int i = 0; i < count; i++)
                 {
-                    streamWriter.WriteLine(typeList[i].ToString()); // Write & WriteLine call the same
-                                                                    //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
-                                                                    // so adding the '\n' manually has no effect just causing platform dependent issues. 
+                    streamWriter.WriteLine(frames[typeList[i]].ToString()); // Write & WriteLine call the same
+                                                                            //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
+                                                                            // so adding the '\n' manually has no effect just causing platform dependent issues. 
                 }
             }
             else
@@ -149,16 +153,17 @@ namespace SL3Reader
             streamWriter.Close();
         }
 
-        private static List<int> GetBreakPoints(List<IFrame> frames, out int contiguousLength)
+        private List<int> GetBreakPoints(List<int> framesToCheck, out int contiguousLength)
         {
             int i = 0;
-            int frameCount = frames.Count;
-            float previousRange = frames[0].MaxRange;
+            var frames = Frames;
+            int frameCount = framesToCheck.Count;
+            float previousRange = frames[framesToCheck[0]].MaxRange;
             List<int> breakpoints = new(frameCount / 300) { 0 }; // ~300 empirical guess.
 
             for (; i < frameCount; i++)
             {
-                float currentRange = frames[i].MaxRange;
+                float currentRange = frames[framesToCheck[i]].MaxRange;
                 if (currentRange != previousRange)
                 {
                     previousRange = currentRange;
@@ -192,12 +197,13 @@ namespace SL3Reader
                 Directory.Delete(path, true);
             path = Directory.CreateDirectory(path).FullName;
 
-            int frameCount = Frames.Count; // Initialize the frames.
+            var frames = Frames;
+            int frameCount = frames.Count; // Initialize the frames.
             if (frameCount < 1) return;
 
-            List<IFrame> imageFrames = IndexByType[surveyType];
+            List<int> imageFrames = IndexByType[surveyType];
             if (imageFrames.Count < 1) return; // Return when no sidescan exists
-            int numberOfColumns = (int)imageFrames[0].LengthOfEchoData;
+            int numberOfColumns = (int)frames[imageFrames[0]].LengthOfEchoData;
             string prefix = GetPrefix(surveyType);
 
             List<int> breakpoints = GetBreakPoints(imageFrames, out int maxHeight);
@@ -215,7 +221,7 @@ namespace SL3Reader
 
                 for (int j = first, k = 0; j < final; j++)
                 {
-                    long dataOffset = imageFrames[j].DataOffset;
+                    long dataOffset = frames[imageFrames[j]].DataOffset;
                     if (Seek(dataOffset, SeekOrigin.Begin) != dataOffset)
                         throw new IOException("Unable to seek.");
 
@@ -244,10 +250,11 @@ namespace SL3Reader
 
         public unsafe void ExamineUnknown8Datasets()
         {
-            int frameCount = Frames.Count; // Initialize the frames.
+            var frames = Frames;
+            int frameCount = frames.Count; // Initialize the frames.
             if (frameCount < 1) return;
 
-            List<IFrame> unknown8Frames = IndexByType[SurveyType.Unknown8];
+            List<int> unknown8Frames = IndexByType[SurveyType.Unknown8];
             int unknown8FrameCount = unknown8Frames.Count;
             if (frameCount < 1) return; // Return when no U8 exists
 
@@ -256,7 +263,7 @@ namespace SL3Reader
             {
                 for (int i = 0; i < unknown8FrameCount - 1; i++)
                 {
-                    IFrame frame = unknown8Frames[i];
+                    IFrame frame = frames[unknown8Frames[i]];
                     Seek(frame.DataOffset, SeekOrigin.Begin);
                     Read(new(p, 512));
                     for (int j = 0; j < 256; j += 2)
@@ -274,12 +281,15 @@ namespace SL3Reader
 
             path = Path.GetFullPath(path);
 
-            int frameCount = Frames.Count; // Initialize the frames.
+            var frames = Frames;
+            var coords = AugmentedCoordinates;
+
+            int frameCount = frames.Count; // Initialize the frames.
             if (frameCount < 1) return;
 
             using StreamWriter streamWriter = File.CreateText(path);
 
-            List<IFrame> frames3D = IndexByType[SurveyType.ThreeDimensional];
+            List<int> frames3D = IndexByType[SurveyType.ThreeDimensional];
             int frames3DLength = frames3D.Count;
             if (frames3DLength < 1) return;
 
@@ -295,7 +305,8 @@ namespace SL3Reader
 
             for (int i = 0; i < frames3DLength; i++)
             {
-                IFrame frame = frames3D[i];
+                IFrame frame = frames[frames3D[i]];
+                var coord = coords[frames3D[i]]; // TODO: remove double ref.
                 long offset = frame.DataOffset;
                 if (Seek(offset, SeekOrigin.Begin) != offset)
                     throw new IOException("Unable to seek!");
@@ -305,8 +316,8 @@ namespace SL3Reader
                 ReadExactly(new(measurements, header.NumberOfUsedBytes));
 
                 uint campaignID = frame.CampaignID;
-                double centralX = frame.X, centralY = frame.Y, centralZ = .3048 * frame.GNSSAltitude;
-                (double sin, double cos) = double.SinCos(frame.GNSSHeading - .5 * double.Pi);
+                double centralX = coord.X, centralY = coord.Y, centralZ = .3048 * coord.Altitude;
+                (double sin, double cos) = double.SinCos(frame.MagneticHeading - .5 * double.Pi);
 
                 // Left side
                 byte* limit = measurements + header.NumberOfLeftBytes;
@@ -314,7 +325,7 @@ namespace SL3Reader
                 {
                     InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
 
-                    double delta = -.3048 * measurement->Delta;
+                    double delta = -.3048 * measurement->Delta; // Negative side
                     double x = double.FusedMultiplyAdd(delta, sin, centralX);
                     double y = double.FusedMultiplyAdd(delta, cos, centralY);
                     double z = double.FusedMultiplyAdd(-.3048, measurement->Depth, centralZ);
@@ -328,7 +339,7 @@ namespace SL3Reader
                 {
                     InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
 
-                    double delta = .3048 * measurement->Delta;
+                    double delta = .3048 * measurement->Delta; // Positive side
                     double x = double.FusedMultiplyAdd(delta, sin, centralX);
                     double y = double.FusedMultiplyAdd(delta, cos, centralY);
                     double z = double.FusedMultiplyAdd(-.3048, measurement->Depth, centralZ);
@@ -371,24 +382,26 @@ namespace SL3Reader
         internal void AugmentTrajectory()
         {
             const double lim = 1.2d;
-            const double C = 1.4326d; // Empirical
+            const double C = 1.4326d; // Empirical, around √2.
 
             List<GeoPoint> coordinates = AugmentedCoordinates;
-
-            int frameCount = Frames.Count; // Initialize the frames.
+            var frames = Frames;
+            int frameCount = frames.Count; // Initialize the frames.
             if (frameCount < 1) return;
 
             (double x, double y, double v, double t, double d) =
-                Frames[0].UnpackNavParameters();
-            coordinates.Add(new(x, y, d, 0));
+                frames[0].UnpackNavParameters();
+            coordinates.Add(new(x, y, d, frames[0].GNSSAltitude, 0));
 
             for (int i = 1; i < frameCount; i++)
             {
-                IFrame frame = Frames[i];
+                IFrame frame = frames[i];
                 (double nx, double ny, double nv, double nt, double nd) =
                     frame.UnpackNavParameters();
-                double sv = v + nv, dt = nt - t;
-                double vec = C * .5d * sv * dt, ad = (nv * nd + v * d) / sv;
+                double sv = nv + v,
+                       dt = nt - t;
+                double vec = C * .5d * sv * dt, 
+                       ad = (nv * nd + v * d) / sv;
                 (double sin, double cos) = double.SinCos(ad);
 
                 y = double.FusedMultiplyAdd(vec, sin, y);
@@ -408,7 +421,7 @@ namespace SL3Reader
                     if (double.Abs(dx) > lim)
                         x = nx + double.CopySign(lim, dx);
                 }
-                coordinates.Add(new(x, y, ad, 0));
+                coordinates.Add(new(x, y, d, frame.GNSSAltitude, 0));
             }
         }
 
