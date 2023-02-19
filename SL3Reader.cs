@@ -275,7 +275,7 @@ namespace SL3Reader
             }
         }
 
-        public unsafe void Export3D(string path, bool includeUnreliable = false)
+        public unsafe void Export3D(string path, bool includeUnreliable = false, bool magneticHeading = false)
         {
             ArgumentNullException.ThrowIfNull(nameof(path));
 
@@ -317,7 +317,7 @@ namespace SL3Reader
 
                 uint campaignID = frame.CampaignID;
                 double centralX = coord.X, centralY = coord.Y, centralZ = .3048 * coord.Altitude;
-                (double sin, double cos) = double.SinCos(frame.MagneticHeading - .5 * double.Pi);
+                (double sin, double cos) = double.SinCos((magneticHeading ? frame.MagneticHeading : frame.GNSSHeading) - .5 * double.Pi);
 
                 // Left side
                 byte* limit = measurements + header.NumberOfLeftBytes;
@@ -400,7 +400,7 @@ namespace SL3Reader
                     frame.UnpackNavParameters();
                 double sv = nv + v,
                        dt = nt - t;
-                double vec = C * .5d * sv * dt, 
+                double vec = C * .5d * sv * dt,
                        ad = (nv * nd + v * d) / sv;
                 (double sin, double cos) = double.SinCos(ad);
 
