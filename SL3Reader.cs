@@ -278,26 +278,19 @@ namespace SL3Reader
         public unsafe void Export3D(string path, bool includeUnreliable = false, bool magneticHeading = false)
         {
             ArgumentNullException.ThrowIfNull(nameof(path));
-
-            path = Path.GetFullPath(path);
-
-            var frames = Frames;
-            var coords = AugmentedCoordinates;
-
+            
+            IReadOnlyList<IFrame> frames = Frames;
             int frameCount = frames.Count; // Initialize the frames.
             if (frameCount < 1) return;
-
-            using StreamWriter streamWriter = File.CreateText(path);
 
             List<int> frames3D = IndexByType[SurveyType.ThreeDimensional];
             int frames3DLength = frames3D.Count;
             if (frames3DLength < 1) return;
 
-            // Test
-            // List<IFrame> framesSS = IndexByType[SurveyType.SideScan];
-            //framesSS[56].GetNearest3DFrame(frames3D, out IFrame? frm);
-            // END Test
+            using StreamWriter streamWriter = File.CreateText(path);
+            streamWriter.WriteLine("Campaign,X,Y,Z,Reliability");
 
+            List<GeoPoint> augmentedCoordinates = AugmentedCoordinates;
             ThreeDimensionalFrameHeader header = new();
             Span<byte> sHeader = new(&header, ThreeDimensionalFrameHeader.Size);
             byte* measurements = stackalloc byte[400 * InterferometricMeasurement.Size],
@@ -305,8 +298,9 @@ namespace SL3Reader
 
             for (int i = 0; i < frames3DLength; i++)
             {
-                IFrame frame = frames[frames3D[i]];
-                var coord = coords[frames3D[i]]; // TODO: remove double ref.
+                int frame3DIndex = frames3D[i];
+                IFrame frame = frames[frame3DIndex];
+                GeoPoint augmentedCoordinate = augmentedCoordinates[frame3DIndex];
                 long offset = frame.DataOffset;
                 if (Seek(offset, SeekOrigin.Begin) != offset)
                     throw new IOException("Unable to seek!");
@@ -316,7 +310,7 @@ namespace SL3Reader
                 ReadExactly(new(measurements, header.NumberOfUsedBytes));
 
                 uint campaignID = frame.CampaignID;
-                double centralX = coord.X, centralY = coord.Y, centralZ = .3048 * coord.Altitude;
+                double centralX = augmentedCoordinate.X, centralY = augmentedCoordinate.Y, centralZ = .3048 * augmentedCoordinate.Altitude;
                 (double sin, double cos) = double.SinCos((magneticHeading ? frame.MagneticHeading : frame.GNSSHeading) - .5 * double.Pi);
 
                 // Left side
