@@ -12,29 +12,25 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Diagnostics.Metrics;
 
-namespace SL3Reader
-{
+namespace SL3Reader {
     [DebuggerDisplay("{Name}")]
     public class SL3Reader :
         FileStream,
         IEnumerable<IFrame>,
         IEnumerable,
         IReadOnlyList<IFrame>,
-        IReadOnlyCollection<IFrame>
-    {
+        IReadOnlyCollection<IFrame> {
         #region Frame support
         private List<IFrame> frames;
         public IReadOnlyList<IFrame> Frames => frames ??= CreateNewFrameList(this);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private List<IFrame> CreateNewFrameList()
-        {
+        private List<IFrame> CreateNewFrameList() {
             const long averageFrameSize = 2118L; // Empirically set value to avoid frequent resize of the underlying array.
             return new((int)(Length / averageFrameSize));
         }
 
-        private List<IFrame> CreateNewFrameList(IEnumerable<IFrame> collection)
-        {
+        private List<IFrame> CreateNewFrameList(IEnumerable<IFrame> collection) {
             List<IFrame> localFrames = CreateNewFrameList();
             InitIndexSupport(localFrames.Capacity);
 
@@ -42,8 +38,7 @@ namespace SL3Reader
             SortedDictionary<uint, List<int>> campaignIndex = indexByCampaign;
 
             int n = 0;
-            foreach (IFrame frame in collection)
-            {
+            foreach (IFrame frame in collection) {
                 localFrames.Add(frame);
                 typeIndex[frame.SurveyType].Add(n);
                 if (campaignIndex.TryGetValue(frame.CampaignID, out List<int> campaignList))
@@ -65,8 +60,7 @@ namespace SL3Reader
         #region Augmented Coordinates
         private List<GeoPoint> augmentedCoordinates;
         public List<GeoPoint> AugmentedCoordinates => augmentedCoordinates ??= CreateNewCoordinateList();
-        private List<GeoPoint> CreateNewCoordinateList()
-        {
+        private List<GeoPoint> CreateNewCoordinateList() {
             const long averageFrameSize = 2118L; // Empirically set value to avoid frequent resize of the underlying array.
             return new((int)(Length / averageFrameSize));
         }
@@ -78,8 +72,7 @@ namespace SL3Reader
         public SortedDictionary<SurveyType, List<int>> IndexByType => indexByType;
         // Maybe useless, due to the drifting in 3D.
         public SortedDictionary<uint, List<int>> IndexByCampaign => indexByCampaign;
-        private void InitIndexSupport(int estimatedCount)
-        {
+        private void InitIndexSupport(int estimatedCount) {
             indexByType = new()
             {
                 { SurveyType.Primary, new(estimatedCount / 8) },
@@ -101,8 +94,7 @@ namespace SL3Reader
         #endregion Indices
         public unsafe SL3Reader(string path) :
            base(path, FileMode.Open, FileAccess.Read,
-           FileShare.Read, 4096, FileOptions.RandomAccess)
-        {
+           FileShare.Read, 4096, FileOptions.RandomAccess) {
             if (Length < (SLFileHeader.Size + Frame.MinimumInitSize))
                 throw new EndOfStreamException("The file is too short to be valid.");
 
@@ -115,33 +107,28 @@ namespace SL3Reader
             AugmentTrajectory();
         }
 
-        public unsafe void ExportToCSV(string path, SurveyType? filter = null)
-        {
+        public unsafe void ExportToCSV(string path, SurveyType? filter = null) {
             // StreamWriter is set to ASCII. If you add non-ASCII chars, revert to UTF-8.
             const string CSVHeader = "DateTime,SurveyType,WaterDepth,Longitude,Latitude,GNSSAltitude,GNSSHeading,GNSSSpeed,MagneticHeading,MinRange,MaxRange,WaterTemperature,WaterSpeed,HardwareTime,Frequency,Milliseconds,AugmentedX,AugmentedY";
 
 
-            FileStreamOptions fileStreamOptions = new() { Access = FileAccess.Write, Mode = FileMode.OpenOrCreate, Share = FileShare.Read, Options = FileOptions.SequentialScan };
+            FileStreamOptions fileStreamOptions = new() { Access = FileAccess.Write, Mode = FileMode.Create, Share = FileShare.Read, Options = FileOptions.SequentialScan };
             using StreamWriter streamWriter = new(path, System.Text.Encoding.ASCII, fileStreamOptions);// Delay file open
             streamWriter.WriteLine(CSVHeader);
 
-            if (filter is SurveyType internalFilter)
-            {
+            if (filter is SurveyType internalFilter) {
                 List<int> typeList = indexByType[internalFilter];
                 int count = typeList.Count;
                 var frames = Frames;
 
-                for (int i = 0; i < count; i++)
-                {
+                for (int i = 0; i < count; i++) {
                     streamWriter.WriteLine(frames[typeList[i]].ToString()); // Write & WriteLine call the same
                                                                             //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
                                                                             // so adding the '\n' manually has no effect just causing platform dependent issues. 
                 }
             }
-            else
-            {
-                for (int i = 0, frameCount = Frames.Count; i < frameCount; i++)
-                {
+            else {
+                for (int i = 0, frameCount = Frames.Count; i < frameCount; i++) {
                     GeoPoint augmentedCoordinate = AugmentedCoordinates[i];
                     streamWriter.WriteLine(Frames[i].ToString() + ',' +
                                            augmentedCoordinate.ToString());
@@ -153,19 +140,16 @@ namespace SL3Reader
             streamWriter.Close();
         }
 
-        private List<int> GetBreakPoints(List<int> framesToCheck, out int contiguousLength)
-        {
+        private List<int> GetBreakPoints(List<int> framesToCheck, out int contiguousLength) {
             int i = 0;
             var frames = Frames;
             int frameCount = framesToCheck.Count;
             float previousRange = frames[framesToCheck[0]].MaxRange;
             List<int> breakpoints = new(frameCount / 300) { 0 }; // ~300 empirical guess.
 
-            for (; i < frameCount; i++)
-            {
+            for (; i < frameCount; i++) {
                 float currentRange = frames[framesToCheck[i]].MaxRange;
-                if (currentRange != previousRange)
-                {
+                if (currentRange != previousRange) {
                     previousRange = currentRange;
                     breakpoints.Add(i);
                 }
@@ -180,8 +164,7 @@ namespace SL3Reader
                  maxIndex = breakpoints.Count - 1,
                  delta;
                  j < maxIndex;
-                 j += 2)
-            {
+                 j += 2) {
                 if (contiguousLength < (delta = breakpoints[1 + j] - breakpoints[j]))
                     contiguousLength = delta;
             }
@@ -189,8 +172,7 @@ namespace SL3Reader
             return breakpoints;
         }
 
-        public void ExportImagery(string path, SurveyType surveyType = SurveyType.SideScan)
-        {
+        public void ExportImagery(string path, SurveyType surveyType = SurveyType.SideScan) {
             ArgumentNullException.ThrowIfNull(nameof(path));
 
             if (Directory.Exists(path))
@@ -210,8 +192,7 @@ namespace SL3Reader
 
             byte[] buffer = BitmapHelper.CreateBuffer(maxHeight, numberOfColumns);
 
-            for (int i = 0, maxIndex = breakpoints.Count - 1; i < maxIndex; i++)
-            {
+            for (int i = 0, maxIndex = breakpoints.Count - 1; i < maxIndex; i++) {
                 int first = breakpoints[i], final = breakpoints[1 + i];
                 BitmapHelper.UpdateBuffer(
                     buffer, final - first, numberOfColumns,
@@ -219,8 +200,7 @@ namespace SL3Reader
                     out Span<byte> fileBuffer,
                     out Span<byte> pixelData);
 
-                for (int j = first, k = 0; j < final; j++)
-                {
+                for (int j = first, k = 0; j < final; j++) {
                     long dataOffset = frames[imageFrames[j]].DataOffset;
                     if (Seek(dataOffset, SeekOrigin.Begin) != dataOffset)
                         throw new IOException("Unable to seek.");
@@ -237,8 +217,7 @@ namespace SL3Reader
 
         [SkipLocalsInit, MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static string GetPrefix(SurveyType surveyType) =>
-            surveyType switch
-            {
+            surveyType switch {
                 SurveyType.SideScan => "SS_",
                 SurveyType.DownScan => "DS_",
                 SurveyType.Primary => "PS_",
@@ -248,8 +227,7 @@ namespace SL3Reader
                 _ => "UNKNOWN_"
             };
 
-        public unsafe void ExamineUnknown8Datasets()
-        {
+        public unsafe void ExamineUnknown8Datasets() {
             var frames = Frames;
             int frameCount = frames.Count; // Initialize the frames.
             if (frameCount < 1) return;
@@ -259,15 +237,12 @@ namespace SL3Reader
             if (frameCount < 1) return; // Return when no U8 exists
 
             var buffer = new byte[512];
-            fixed (byte* p = &buffer[0])
-            {
-                for (int i = 0; i < unknown8FrameCount - 1; i++)
-                {
+            fixed (byte* p = &buffer[0]) {
+                for (int i = 0; i < unknown8FrameCount - 1; i++) {
                     IFrame frame = frames[unknown8Frames[i]];
                     Seek(frame.DataOffset, SeekOrigin.Begin);
                     Read(new(p, 512));
-                    for (int j = 0; j < 256; j += 2)
-                    {
+                    for (int j = 0; j < 256; j += 2) {
                         Debug.Print($"{buffer[j]}, {buffer[1 + j]}");
                     }
                 }
@@ -275,10 +250,9 @@ namespace SL3Reader
             }
         }
 
-        public unsafe void Export3D(string path, bool includeUnreliable = false, bool magneticHeading = false)
-        {
+        public unsafe void Export3D(string path, bool includeUnreliable = false, bool magneticHeading = false) {
             ArgumentNullException.ThrowIfNull(nameof(path));
-            
+
             IReadOnlyList<IFrame> frames = Frames;
             int frameCount = frames.Count; // Initialize the frames.
             if (frameCount < 1) return;
@@ -296,8 +270,7 @@ namespace SL3Reader
             byte* measurements = stackalloc byte[400 * InterferometricMeasurement.Size],
                   reset = measurements;
 
-            for (int i = 0; i < frames3DLength; i++)
-            {
+            for (int i = 0; i < frames3DLength; i++) {
                 int frame3DIndex = frames3D[i];
                 IFrame frame = frames[frame3DIndex];
                 GeoPoint augmentedCoordinate = augmentedCoordinates[frame3DIndex];
@@ -315,8 +288,7 @@ namespace SL3Reader
 
                 // Left side
                 byte* limit = measurements + header.NumberOfLeftBytes;
-                for (; measurements < limit; measurements += InterferometricMeasurement.Size)
-                {
+                for (; measurements < limit; measurements += InterferometricMeasurement.Size) {
                     InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
 
                     double delta = -.3048 * measurement->Delta; // Negative side
@@ -329,8 +301,7 @@ namespace SL3Reader
 
                 // Right side
                 limit = measurements + header.NumberOfRightBytes;
-                for (; measurements < limit; measurements += InterferometricMeasurement.Size)
-                {
+                for (; measurements < limit; measurements += InterferometricMeasurement.Size) {
                     InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
 
                     double delta = .3048 * measurement->Delta; // Positive side
@@ -341,11 +312,9 @@ namespace SL3Reader
                     streamWriter.WriteLine($"{campaignID},{x},{y},{z},R");
                 }
 
-                if (includeUnreliable)
-                {
+                if (includeUnreliable) {
                     limit = measurements + header.NumberOfUnreliableLeftBytes;
-                    for (; measurements < limit; measurements += InterferometricMeasurement.Size)
-                    {
+                    for (; measurements < limit; measurements += InterferometricMeasurement.Size) {
                         InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
                         float delta = measurement->Delta;
                         if (delta is < 0.001f or > 5000.0f) continue;
@@ -356,8 +325,7 @@ namespace SL3Reader
                     }
 
                     limit = measurements + header.NumberOfUnreliableRightBytes;
-                    for (; measurements < limit; measurements += InterferometricMeasurement.Size)
-                    {
+                    for (; measurements < limit; measurements += InterferometricMeasurement.Size) {
                         InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
                         float delta = measurement->Delta;
                         if (delta is < 0.001f or > 5000.0f) continue;
@@ -373,51 +341,96 @@ namespace SL3Reader
             streamWriter.Close();
         }
 
-        internal void AugmentTrajectory()
-        {
+        internal void AugmentTrajectory() {
             const double lim = 1.2d;
             const double C = 1.4326d; // Empirical, around √2.
+            //const double C = 1.3142135623730950488016887242097;
 
             List<GeoPoint> coordinates = AugmentedCoordinates;
-            var frames = Frames;
+            IReadOnlyList<IFrame> frames = Frames;
             int frameCount = frames.Count; // Initialize the frames.
             if (frameCount < 1) return;
 
-            (double x, double y, double v, double t, double d) =
+            (double x0, double y0, double v0, double t0, double d0) =
                 frames[0].UnpackNavParameters();
-            coordinates.Add(new(x, y, d, frames[0].GNSSAltitude, 0));
+            coordinates.Add(new(x0, y0, d0, frames[0].GNSSAltitude, 0));
 
-            for (int i = 1; i < frameCount; i++)
-            {
+            for (int i = 1; i < frameCount; i++) {
                 IFrame frame = frames[i];
-                (double nx, double ny, double nv, double nt, double nd) =
+                (double x1, double y1, double v1, double t1, double d1) =
                     frame.UnpackNavParameters();
-                double sv = nv + v,
-                       dt = nt - t;
-                double vec = C * .5d * sv * dt,
-                       ad = (nv * nd + v * d) / sv;
-                (double sin, double cos) = double.SinCos(ad);
 
-                y = double.FusedMultiplyAdd(vec, sin, y);
-                x = double.FusedMultiplyAdd(vec, cos, x);
-                t = nt;
-                v = nv;
-                d = nd;
+                (double sin0, double cos0) = double.SinCos(d0);
+                (double sin1, double cos1) = double.SinCos(d1);
+
+                double vx0 = cos0 * v0,
+                       vy0 = sin0 * v0,
+                       vx1 = cos1 * v1,
+                       vy1 = sin1 * v1,
+                       dt = t1 - t0;
+
+                x0 += C * .5d * (vx0 + vx1) * dt;
+                y0 += C * .5d * (vy0 + vy1) * dt;
+
+                d0 = d1; t0 = t1; v0 = v1;
 
                 if (frame.SurveyType is SurveyType.Primary or SurveyType.Secondary or
-                    SurveyType.Unknown7 or SurveyType.Unknown8)
-                {
-                    double dy = y - ny;
+                    SurveyType.Unknown7 or SurveyType.Unknown8) {
+                    double dy = y0 - y1;
+                    //y0 = y1 + double.CopySign(double.Clamp((dy / lim),-lim,lim), dy);
                     if (double.Abs(dy) > lim)
-                        y = ny + double.CopySign(lim, dy);
+                        y0 = y1 + double.CopySign(lim, dy);
 
-                    double dx = x - nx;
+                    double dx = x0 - x1;
                     if (double.Abs(dx) > lim)
-                        x = nx + double.CopySign(lim, dx);
+                        x0 = x1 + double.CopySign(lim, dx);
                 }
-                coordinates.Add(new(x, y, d, frame.GNSSAltitude, 0));
+                coordinates.Add(new(x0, y0, d0, frame.GNSSAltitude, 0));
             }
         }
+
+        //internal void AugmentTrajectory() {
+        //    const double lim = 1.2d;
+        //    const double C = 1.4326d; // Empirical, around √2.
+
+        //    List<GeoPoint> coordinates = AugmentedCoordinates;
+        //    var frames = Frames;
+        //    int frameCount = frames.Count; // Initialize the frames.
+        //    if (frameCount < 1) return;
+
+        //    (double x, double y, double v, double t, double d) =
+        //        frames[0].UnpackNavParameters();
+        //    coordinates.Add(new(x, y, d, frames[0].GNSSAltitude, 0));
+
+        //    for (int i = 1; i < frameCount; i++) {
+        //        IFrame frame = frames[i];
+        //        (double nx, double ny, double nv, double nt, double nd) =
+        //            frame.UnpackNavParameters();
+        //        double sv = nv + v,
+        //               dt = nt - t;
+        //        double vec = C * .5d * sv * dt,
+        //               ad = (nv * nd + v * d) / sv;
+        //        (double sin, double cos) = double.SinCos(ad);
+
+        //        y = double.FusedMultiplyAdd(vec, sin, y);
+        //        x = double.FusedMultiplyAdd(vec, cos, x);
+        //        t = nt;
+        //        v = nv;
+        //        d = nd;
+
+        //        if (frame.SurveyType is SurveyType.Primary or SurveyType.Secondary or
+        //            SurveyType.Unknown7 or SurveyType.Unknown8) {
+        //            double dy = y - ny;
+        //            if (double.Abs(dy) > lim)
+        //                y = ny + double.CopySign(lim, dy);
+
+        //            double dx = x - nx;
+        //            if (double.Abs(dx) > lim)
+        //                x = nx + double.CopySign(lim, dx);
+        //        }
+        //        coordinates.Add(new(x, y, d, frame.GNSSAltitude, 0));
+        //    }
+        //}
 
         #region Enumerator support
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -430,16 +443,14 @@ namespace SL3Reader
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         IEnumerator IEnumerable.GetEnumerator() => GetSL3Enumerator();
 
-        public readonly struct Enumerator : IEnumerator<IFrame>, IEnumerator
-        {
+        public readonly struct Enumerator : IEnumerator<IFrame>, IEnumerator {
             private readonly SL3Reader source;
             private readonly unsafe Frame* pCurrent;
             private readonly long fileLength;
             readonly unsafe IFrame IEnumerator<IFrame>.Current => *pCurrent;
             readonly unsafe object IEnumerator.Current => *pCurrent;
 
-            public unsafe Enumerator(SL3Reader source)
-            {
+            public unsafe Enumerator(SL3Reader source) {
                 bool lockTaken = false;
 
                 Monitor.Enter(source, ref lockTaken);
@@ -457,15 +468,13 @@ namespace SL3Reader
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private unsafe void InitTimestamp()
-            {
+            private unsafe void InitTimestamp() {
                 source.ReadExactly(new(pCurrent, Frame.MinimumInitSize)); // We won't have to read the whole
                 // frame: just till the end of pCurrent->HardwareTime.
                 Frame.InitTimestampBase(pCurrent->HardwareTime);
             }
 
-            unsafe bool IEnumerator.MoveNext()
-            {
+            unsafe bool IEnumerator.MoveNext() {
                 Frame* currentFrame = pCurrent;
                 SL3Reader stream = source;
 
@@ -475,13 +484,11 @@ namespace SL3Reader
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void Reset()
-            {
+            public void Reset() {
                 if (source.Seek(SLFileHeader.Size, SeekOrigin.Begin) != SLFileHeader.Size)
                     throw new IOException("Unable to seek.");
             }
-            unsafe void IDisposable.Dispose()
-            {
+            unsafe void IDisposable.Dispose() {
                 Monitor.Exit(source);
                 AlignedFree(pCurrent);
             }
