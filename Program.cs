@@ -64,7 +64,7 @@ namespace SL3Reader {
                 Console.WriteLine("File statistics:");
                 Console.WriteLine("Number of frames: " + sl3reader.Frames.Count.ToString());
                 Console.WriteLine("Number of primary frames: " + indexByType[SurveyType.Primary].Count.ToString());
-                Console.WriteLine("Number of primary frames: " + indexByType[SurveyType.Secondary].Count.ToString());
+                Console.WriteLine("Number of secondary frames: " + indexByType[SurveyType.Secondary].Count.ToString());
                 Console.WriteLine("Number of left sidescan frames: " + indexByType[SurveyType.LeftSidescan].Count.ToString());
                 Console.WriteLine("Number of right sidescan frames: " + indexByType[SurveyType.RightSidescan].Count.ToString());
                 Console.WriteLine("Number of sidescan frames: " + indexByType[SurveyType.SideScan].Count.ToString());
