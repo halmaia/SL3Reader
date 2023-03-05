@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using static System.IO.Path;
+using static System.Console;
 
 namespace SL3Reader {
 
@@ -12,14 +14,14 @@ namespace SL3Reader {
 
             string input = GetFullPath(args[0]);
             if (!Exists(input)) {
-                Console.WriteLine("Input file not found!");
+                WriteLine("Input file not found!");
                 PrintUsage();
                 return;
             }
 
             string output = GetFullPath(args[1]);
             if (!Exists(GetDirectoryName(output))) {
-                Console.WriteLine("Directory not found for the output file!");
+                WriteLine("Directory not found for the output file!");
                 PrintUsage();
                 return;
             }
@@ -37,8 +39,11 @@ namespace SL3Reader {
                 case "-route":
                     sl3reader.ExportToCSV(output);
                     break;
+                case "-ss":
+                    sl3reader.ExportImagery(output);
+                    break;
                 default:
-                    Console.WriteLine("Invalid third argument (" + expSelector + ").");
+                    WriteLine("Invalid third argument (" + expSelector + ").");
                     PrintUsage();
                     return;
             }
@@ -48,33 +53,33 @@ namespace SL3Reader {
             return;
 
             static void PrintUsage() {
-                Console.WriteLine("Usage examples:\n");
+                WriteLine("Usage examples:\n");
 
-                Console.WriteLine("To export route:");
-                Console.WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -route\n");
-                Console.WriteLine("To export 3D points with magnetic heading (e.g. measured with Precision-9):");
-                Console.WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dm\n");
-                Console.WriteLine("To export 3D points with GNSS heading (e.g. in-built GPS):");
-                Console.WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dg");
+                WriteLine("To export route:");
+                WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -route\n");
+                WriteLine("To export 3D points with magnetic heading (e.g. measured with Precision-9):");
+                WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dm\n");
+                WriteLine("To export 3D points with GNSS heading (e.g. in-built GPS):");
+                WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dg");
             }
 
             void PrintSummary() {
-                var indexByType = sl3reader.IndexByType;
+                SortedDictionary<SurveyType, List<int>> indexByType = sl3reader.IndexByType;
 
-                Console.WriteLine("File statistics:");
-                Console.WriteLine("Number of frames: " + sl3reader.Frames.Count.ToString());
-                Console.WriteLine("Number of primary frames: " + indexByType[SurveyType.Primary].Count.ToString());
-                Console.WriteLine("Number of secondary frames: " + indexByType[SurveyType.Secondary].Count.ToString());
-                Console.WriteLine("Number of left sidescan frames: " + indexByType[SurveyType.LeftSidescan].Count.ToString());
-                Console.WriteLine("Number of right sidescan frames: " + indexByType[SurveyType.RightSidescan].Count.ToString());
-                Console.WriteLine("Number of sidescan frames: " + indexByType[SurveyType.SideScan].Count.ToString());
-                Console.WriteLine("Number of downscan frames: " + indexByType[SurveyType.DownScan].Count.ToString());
-                Console.WriteLine("Number of 3D frames: " + indexByType[SurveyType.ThreeDimensional].Count.ToString());
+                WriteLine("File statistics:");
+                WriteLine("\tNumber of frames: " + sl3reader.Frames.Count.ToString());
+                WriteLine("\tNumber of primary frames: " + indexByType[SurveyType.Primary].Count.ToString());
+                WriteLine("\tNumber of secondary frames: " + indexByType[SurveyType.Secondary].Count.ToString());
+                WriteLine("\tNumber of left sidescan frames: " + indexByType[SurveyType.LeftSidescan].Count.ToString());
+                WriteLine("\tNumber of right sidescan frames: " + indexByType[SurveyType.RightSidescan].Count.ToString());
+                WriteLine("\tNumber of sidescan frames: " + indexByType[SurveyType.SideScan].Count.ToString());
+                WriteLine("\tNumber of downscan frames: " + indexByType[SurveyType.DownScan].Count.ToString());
+                WriteLine("\tNumber of 3D frames: " + indexByType[SurveyType.ThreeDimensional].Count.ToString());
                 
-                Console.WriteLine();
-                Console.ForegroundColor= ConsoleColor.Green;
-                Console.WriteLine("\nExport finished successfully.");
-                Console.ForegroundColor = ConsoleColor.White;
+                WriteLine();
+                ForegroundColor= ConsoleColor.Green;
+                WriteLine("\nExport finished successfully.");
+                ForegroundColor = ConsoleColor.White;
             }
         }
     }

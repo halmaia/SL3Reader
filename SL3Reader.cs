@@ -11,6 +11,8 @@ using System.Numerics;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Diagnostics.Metrics;
+using System.Text;
+using System.Buffers;
 
 namespace SL3Reader {
     [DebuggerDisplay("{Name}")]
@@ -202,8 +204,7 @@ namespace SL3Reader {
 
                 for (int j = first, k = 0; j < final; j++) {
                     long dataOffset = frames[imageFrames[j]].DataOffset;
-                    if (Seek(dataOffset, SeekOrigin.Begin) != dataOffset)
-                        throw new IOException("Unable to seek.");
+                    SeekExactly(dataOffset);
 
                     ReadExactly(pixelData.Slice(fullStride * k++, numberOfColumns));
                 }
@@ -240,7 +241,7 @@ namespace SL3Reader {
             fixed (byte* p = &buffer[0]) {
                 for (int i = 0; i < unknown8FrameCount - 1; i++) {
                     IFrame frame = frames[unknown8Frames[i]];
-                    Seek(frame.DataOffset, SeekOrigin.Begin);
+                    SeekExactly(frame.DataOffset);
                     Read(new(p, 512));
                     for (int j = 0; j < 256; j += 2) {
                         Debug.Print($"{buffer[j]}, {buffer[1 + j]}");
@@ -252,6 +253,10 @@ namespace SL3Reader {
 
         public unsafe void Export3D(string path, bool includeUnreliable = false, bool magneticHeading = false) {
             ArgumentNullException.ThrowIfNull(nameof(path));
+
+            const string doubleFormat = "#.####";
+            CultureInfo invariantCulture = CultureInfo.InvariantCulture;
+            string[] stringArray = GC.AllocateUninitializedArray<string>(5);
 
             IReadOnlyList<IFrame> frames = Frames;
             int frameCount = frames.Count; // Initialize the frames.
@@ -274,9 +279,9 @@ namespace SL3Reader {
                 int frame3DIndex = frames3D[i];
                 IFrame frame = frames[frame3DIndex];
                 GeoPoint augmentedCoordinate = augmentedCoordinates[frame3DIndex];
+
                 long offset = frame.DataOffset;
-                if (Seek(offset, SeekOrigin.Begin) != offset)
-                    throw new IOException("Unable to seek!");
+                SeekExactly(offset);
 
                 ReadExactly(sHeader);
 
@@ -286,17 +291,22 @@ namespace SL3Reader {
                 double centralX = augmentedCoordinate.X, centralY = augmentedCoordinate.Y, centralZ = .3048 * augmentedCoordinate.Altitude;
                 (double sin, double cos) = double.SinCos((magneticHeading ? frame.MagneticHeading : frame.GNSSHeading) - .5 * double.Pi);
 
+
+                stringArray[0] = campaignID.ToString();
+                stringArray[4] = "R";
+
                 // Left side
                 byte* limit = measurements + header.NumberOfLeftBytes;
                 for (; measurements < limit; measurements += InterferometricMeasurement.Size) {
                     InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
 
                     double delta = -.3048 * measurement->Delta; // Negative side
-                    double x = double.FusedMultiplyAdd(delta, sin, centralX);
-                    double y = double.FusedMultiplyAdd(delta, cos, centralY);
-                    double z = double.FusedMultiplyAdd(-.3048, measurement->Depth, centralZ);
 
-                    streamWriter.WriteLine($"{campaignID},{x},{y},{z},R");
+                    stringArray[1] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                    stringArray[2] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
+                    stringArray[3] = double.FusedMultiplyAdd(-.3048, measurement->Depth, centralZ).ToString(doubleFormat, invariantCulture);
+
+                    streamWriter.WriteLine(string.Join(',', stringArray));
                 }
 
                 // Right side
@@ -305,34 +315,48 @@ namespace SL3Reader {
                     InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
 
                     double delta = .3048 * measurement->Delta; // Positive side
-                    double x = double.FusedMultiplyAdd(delta, sin, centralX);
-                    double y = double.FusedMultiplyAdd(delta, cos, centralY);
-                    double z = double.FusedMultiplyAdd(-.3048, measurement->Depth, centralZ);
 
-                    streamWriter.WriteLine($"{campaignID},{x},{y},{z},R");
+                    stringArray[1] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                    stringArray[2] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
+                    stringArray[3] = double.FusedMultiplyAdd(-.3048, measurement->Depth, centralZ).ToString(doubleFormat, invariantCulture);
+
+                    streamWriter.WriteLine(string.Join(',', stringArray));
                 }
 
                 if (includeUnreliable) {
+                    stringArray[4] = "U";
                     limit = measurements + header.NumberOfUnreliableLeftBytes;
                     for (; measurements < limit; measurements += InterferometricMeasurement.Size) {
                         InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
-                        float delta = measurement->Delta;
-                        if (delta is < 0.001f or > 5000.0f) continue;
-                        float depth = measurement->Depth;
-                        if (depth is < 1f or > 250.0f) continue;
+                        double delta = measurement->Delta;
+                        if (delta is < 0.001 or > 5000.0) continue;
+                        double depth = measurement->Depth;
+                        if (depth is < 1 or > 250.0) continue;
 
-                        streamWriter.WriteLine($"{-delta},{i},{depth},U");
+                        delta *= -.3048; // Negative side
+
+                        stringArray[1] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                        stringArray[2] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
+                        stringArray[3] = double.FusedMultiplyAdd(-.3048, depth, centralZ).ToString(doubleFormat, invariantCulture);
+
+                        streamWriter.WriteLine(string.Join(',', stringArray));
                     }
 
                     limit = measurements + header.NumberOfUnreliableRightBytes;
                     for (; measurements < limit; measurements += InterferometricMeasurement.Size) {
                         InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
-                        float delta = measurement->Delta;
-                        if (delta is < 0.001f or > 5000.0f) continue;
-                        float depth = measurement->Depth;
-                        if (depth is < 1f or > 250.0f) continue;
+                        double delta = measurement->Delta;
+                        if (delta is < 0.001 or > 5000.0) continue;
+                        double depth = measurement->Depth;
+                        if (depth is < 1 or > 250.0) continue;
 
-                        streamWriter.WriteLine($"{delta},{i},{depth},U");
+                        delta *= .3048; // Positive side
+
+                        stringArray[1] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                        stringArray[2] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
+                        stringArray[3] = double.FusedMultiplyAdd(-.3048, depth, centralZ).ToString(doubleFormat, invariantCulture);
+
+                        streamWriter.WriteLine(string.Join(',', stringArray));
                     }
                 }
 
@@ -341,10 +365,15 @@ namespace SL3Reader {
             streamWriter.Close();
         }
 
+        [SkipLocalsInit, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void SeekExactly(long offset) {
+            if (Seek(offset, SeekOrigin.Begin) != offset)
+                throw new IOException("Unable to seek!");
+        }
+
         internal void AugmentTrajectory() {
             const double lim = 1.2d;
             const double C = 1.4326d; // Empirical, around √2.
-            //const double C = 1.3142135623730950488016887242097;
 
             List<GeoPoint> coordinates = AugmentedCoordinates;
             IReadOnlyList<IFrame> frames = Frames;
@@ -389,49 +418,6 @@ namespace SL3Reader {
             }
         }
 
-        //internal void AugmentTrajectory() {
-        //    const double lim = 1.2d;
-        //    const double C = 1.4326d; // Empirical, around √2.
-
-        //    List<GeoPoint> coordinates = AugmentedCoordinates;
-        //    var frames = Frames;
-        //    int frameCount = frames.Count; // Initialize the frames.
-        //    if (frameCount < 1) return;
-
-        //    (double x, double y, double v, double t, double d) =
-        //        frames[0].UnpackNavParameters();
-        //    coordinates.Add(new(x, y, d, frames[0].GNSSAltitude, 0));
-
-        //    for (int i = 1; i < frameCount; i++) {
-        //        IFrame frame = frames[i];
-        //        (double nx, double ny, double nv, double nt, double nd) =
-        //            frame.UnpackNavParameters();
-        //        double sv = nv + v,
-        //               dt = nt - t;
-        //        double vec = C * .5d * sv * dt,
-        //               ad = (nv * nd + v * d) / sv;
-        //        (double sin, double cos) = double.SinCos(ad);
-
-        //        y = double.FusedMultiplyAdd(vec, sin, y);
-        //        x = double.FusedMultiplyAdd(vec, cos, x);
-        //        t = nt;
-        //        v = nv;
-        //        d = nd;
-
-        //        if (frame.SurveyType is SurveyType.Primary or SurveyType.Secondary or
-        //            SurveyType.Unknown7 or SurveyType.Unknown8) {
-        //            double dy = y - ny;
-        //            if (double.Abs(dy) > lim)
-        //                y = ny + double.CopySign(lim, dy);
-
-        //            double dx = x - nx;
-        //            if (double.Abs(dx) > lim)
-        //                x = nx + double.CopySign(lim, dx);
-        //        }
-        //        coordinates.Add(new(x, y, d, frame.GNSSAltitude, 0));
-        //    }
-        //}
-
         #region Enumerator support
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private IEnumerator<IFrame> GetSL3Enumerator() =>
@@ -459,7 +445,7 @@ namespace SL3Reader {
                 this.source = source;
                 fileLength = source.Length;
 
-                pCurrent = (Frame*)AlignedAlloc(Frame.ExtendedSize, 8 * (nuint)nuint.Size);
+                pCurrent = (Frame*)AlignedAlloc(Frame.ExtendedSize, 64);
 
                 // The state of the source is unknown, so we have to reset the stream.
                 Reset();
@@ -484,10 +470,7 @@ namespace SL3Reader {
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void Reset() {
-                if (source.Seek(SLFileHeader.Size, SeekOrigin.Begin) != SLFileHeader.Size)
-                    throw new IOException("Unable to seek.");
-            }
+            public void Reset() => source.SeekExactly(SLFileHeader.Size);
             unsafe void IDisposable.Dispose() {
                 Monitor.Exit(source);
                 AlignedFree(pCurrent);
