@@ -13,6 +13,7 @@ using System.Security.Cryptography;
 using System.Diagnostics.Metrics;
 using System.Text;
 using System.Buffers;
+using System.Runtime.Intrinsics.Arm;
 
 namespace SL3Reader {
     [DebuggerDisplay("{Name}")]
@@ -111,11 +112,11 @@ namespace SL3Reader {
 
         public unsafe void ExportToCSV(string path, SurveyType? filter = null) {
             // StreamWriter is set to ASCII. If you add non-ASCII chars, revert to UTF-8.
-            const string CSVHeader = "DateTime,SurveyType,WaterDepth,Longitude,Latitude,GNSSAltitude,GNSSHeading,GNSSSpeed,MagneticHeading,MinRange,MaxRange,WaterTemperature,WaterSpeed,HardwareTime,Frequency,Milliseconds,AugmentedX,AugmentedY";
+            const string CSVHeader = "CampaignID,DateTime,SurveyType,WaterDepth,Longitude,Latitude,GNSSAltitude,GNSSHeading,GNSSSpeed,MagneticHeading,MinRange,MaxRange,WaterTemperature,WaterSpeed,HardwareTime,Frequency,Milliseconds,AugmentedX,AugmentedY";
 
 
             FileStreamOptions fileStreamOptions = new() { Access = FileAccess.Write, Mode = FileMode.Create, Share = FileShare.Read, Options = FileOptions.SequentialScan };
-            using StreamWriter streamWriter = new(path, System.Text.Encoding.ASCII, fileStreamOptions);// Delay file open
+            using StreamWriter streamWriter = new(path, Encoding.ASCII, fileStreamOptions); // Delay file open
             streamWriter.WriteLine(CSVHeader);
 
             if (filter is SurveyType internalFilter) {
@@ -254,9 +255,9 @@ namespace SL3Reader {
         public unsafe void Export3D(string path, bool includeUnreliable = false, bool magneticHeading = false) {
             ArgumentNullException.ThrowIfNull(nameof(path));
 
-            const string doubleFormat = "#.####";
+            const string doubleFormat = "0.####";
             CultureInfo invariantCulture = CultureInfo.InvariantCulture;
-            string[] stringArray = GC.AllocateUninitializedArray<string>(5);
+            string[] stringArray = GC.AllocateUninitializedArray<string>(8);
 
             IReadOnlyList<IFrame> frames = Frames;
             int frameCount = frames.Count; // Initialize the frames.
@@ -267,7 +268,7 @@ namespace SL3Reader {
             if (frames3DLength < 1) return;
 
             using StreamWriter streamWriter = File.CreateText(path);
-            streamWriter.WriteLine("Campaign,X,Y,Z,Reliability");
+            streamWriter.WriteLine("CampaignID,DateTime,X,Y,Z,Angle,Distance,Reliability");
 
             List<GeoPoint> augmentedCoordinates = AugmentedCoordinates;
             ThreeDimensionalFrameHeader header = new();
@@ -287,24 +288,30 @@ namespace SL3Reader {
 
                 ReadExactly(new(measurements, header.NumberOfUsedBytes));
 
-                uint campaignID = frame.CampaignID;
                 double centralX = augmentedCoordinate.X, centralY = augmentedCoordinate.Y, centralZ = .3048 * augmentedCoordinate.Altitude;
                 (double sin, double cos) = double.SinCos((magneticHeading ? frame.MagneticHeading : frame.GNSSHeading) - .5 * double.Pi);
 
-
-                stringArray[0] = campaignID.ToString();
-                stringArray[4] = "R";
+                stringArray[0] = frame.CampaignID.ToString();
+                stringArray[1] = frame.Timestamp.ToString("yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'", invariantCulture);
+                stringArray[7] = "R";
 
                 // Left side
                 byte* limit = measurements + header.NumberOfLeftBytes;
                 for (; measurements < limit; measurements += InterferometricMeasurement.Size) {
                     InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
 
-                    double delta = -.3048 * measurement->Delta; // Negative side
+                    double delta = measurement->Delta;
+                    double depth = measurement->Depth;
+                    double distance = .3048* double.Hypot(delta, depth);
+                    double angle = 90-(360 / double.Tau) * double.Atan2(depth, delta);
 
-                    stringArray[1] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
-                    stringArray[2] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
-                    stringArray[3] = double.FusedMultiplyAdd(-.3048, measurement->Depth, centralZ).ToString(doubleFormat, invariantCulture);
+                    delta *= -.3048; // Negative/Left side
+
+                    stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                    stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
+                    stringArray[4] = double.FusedMultiplyAdd(-.3048, depth, centralZ).ToString(doubleFormat, invariantCulture);
+                    stringArray[5] = angle.ToString(doubleFormat, invariantCulture);
+                    stringArray[6] = distance.ToString(doubleFormat, invariantCulture);
 
                     streamWriter.WriteLine(string.Join(',', stringArray));
                 }
@@ -314,15 +321,23 @@ namespace SL3Reader {
                 for (; measurements < limit; measurements += InterferometricMeasurement.Size) {
                     InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
 
-                    double delta = .3048 * measurement->Delta; // Positive side
+                    double delta = measurement->Delta;
+                    double depth = measurement->Depth;
+                    double distance = .3048* double.Hypot(delta, depth);
+                    double angle =90- (360 / double.Tau) * double.Atan2(depth, delta);
 
-                    stringArray[1] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
-                    stringArray[2] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
-                    stringArray[3] = double.FusedMultiplyAdd(-.3048, measurement->Depth, centralZ).ToString(doubleFormat, invariantCulture);
+                    delta *= .3048; // Positive side
+
+                    stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                    stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
+                    stringArray[4] = double.FusedMultiplyAdd(-.3048, measurement->Depth, centralZ).ToString(doubleFormat, invariantCulture);
+                    stringArray[5] = angle.ToString(doubleFormat, invariantCulture);
+                    stringArray[6] = distance.ToString(doubleFormat, invariantCulture);
 
                     streamWriter.WriteLine(string.Join(',', stringArray));
                 }
 
+                // TODO: Add Angle & Distance:
                 if (includeUnreliable) {
                     stringArray[4] = "U";
                     limit = measurements + header.NumberOfUnreliableLeftBytes;
