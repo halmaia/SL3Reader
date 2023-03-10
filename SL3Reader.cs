@@ -281,15 +281,16 @@ namespace SL3Reader {
                 IFrame frame = frames[frame3DIndex];
                 GeoPoint augmentedCoordinate = augmentedCoordinates[frame3DIndex];
 
-                long offset = frame.DataOffset;
-                SeekExactly(offset);
-
+                SeekExactly(frame.DataOffset);
                 ReadExactly(sHeader);
-
                 ReadExactly(new(measurements, header.NumberOfUsedBytes));
 
-                double centralX = augmentedCoordinate.X, centralY = augmentedCoordinate.Y, centralZ = .3048 * augmentedCoordinate.Altitude;
-                (double sin, double cos) = double.SinCos((magneticHeading ? frame.MagneticHeading : frame.GNSSHeading) - .5 * double.Pi);
+                double centralX = augmentedCoordinate.X,
+                       centralY = augmentedCoordinate.Y,
+                       centralZ = .3048 * augmentedCoordinate.Altitude;
+
+                (double sin, double cos) = 
+                    double.SinCos((magneticHeading ? frame.MagneticHeading : frame.GNSSHeading) - .5 * double.Pi);
 
                 stringArray[0] = frame.CampaignID.ToString();
                 stringArray[1] = frame.Timestamp.ToString("yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'", invariantCulture);
@@ -302,8 +303,8 @@ namespace SL3Reader {
 
                     double delta = measurement->Delta;
                     double depth = measurement->Depth;
-                    double distance = .3048* double.Hypot(delta, depth);
-                    double angle = 90-(360 / double.Tau) * double.Atan2(depth, delta);
+                    double distance = .3048 * double.Hypot(delta, depth);
+                    double angle = 90 - (360 / double.Tau) * double.Atan2(depth, delta);
 
                     delta *= -.3048; // Negative/Left side
 
@@ -323,8 +324,8 @@ namespace SL3Reader {
 
                     double delta = measurement->Delta;
                     double depth = measurement->Depth;
-                    double distance = .3048* double.Hypot(delta, depth);
-                    double angle =90- (360 / double.Tau) * double.Atan2(depth, delta);
+                    double distance = .3048 * double.Hypot(delta, depth);
+                    double angle = 90 - (360 / double.Tau) * double.Atan2(depth, delta);
 
                     delta *= .3048; // Positive side
 
