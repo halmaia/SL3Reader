@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -10,23 +11,19 @@ namespace SL3Reader
     {
         public const int Size = 8;
 
-        private readonly LogFileFormat fileFormat;
-        private readonly short deviceID;
-        private readonly short blockSize;
-        private readonly short reserved;
+        public readonly LogFileFormat FileFormat { get; }
+        public readonly short DeviceID { get; }
 
-        public readonly LogFileFormat FileFormat => fileFormat;
-        public readonly short DeviceID => deviceID;
+        public readonly short BlockSize { get; }
 
-        public readonly short BlockSize => blockSize;
+        public readonly short Reserved { get; }
 
-        public readonly short Reserved => reserved;
-
+        [SkipLocalsInit]
         public readonly override string ToString() => 
-            fileFormat.ToString() + " (" + blockSize.ToString() + ')';
+            FileFormat.ToString() + " (" + BlockSize.ToString() + ')';
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly bool IsValidFormat(LogFileFormat fileFormatToTest) => 
-            fileFormat == fileFormatToTest;
+        public readonly bool IsValidFormat([ConstantExpected] LogFileFormat fileFormatToTest) => 
+            FileFormat == fileFormatToTest;
     }
 }

@@ -3,10 +3,7 @@ using static System.Globalization.CultureInfo;
 using System.Runtime.InteropServices;
 using System;
 using System.Runtime.CompilerServices;
-using System.ComponentModel;
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.IO;
+using System.Globalization;
 
 namespace SL3Reader
 {
@@ -79,11 +76,11 @@ namespace SL3Reader
         #endregion WGS84
 
         #region Search support
-        bool GetNearest3DFrame(List<IFrame> candidates, out IFrame? frame3D);
+        //bool GetNearest3DFrame(List<IFrame> candidates, out IFrame? frame3D);
         #endregion Search support
 
         #region Unpack support
-        (double x, double y, double v, double t, double d) UnpackNavParameters();
+        (double x, double y, double z, double v, double t, double d) QueryMetric();
         #endregion Unpack support
     }
 
@@ -95,8 +92,22 @@ namespace SL3Reader
         public const int BasicSize = 128;
         public const int MinimumInitSize = 44;
 
+        public const double KnotsToMPS = 1852d / 3600d;
+        public const double HalfPI = double.Pi / 2d;
+        public const double MillisecondsToSeconds = 1d / 1000d;
+
+        private const double PolarRadius = 6356752.3142d; // Lowrance uses float, causing truncated precision.
+        private const double RadToDeg = 360d / double.Tau;
+
+        private const double FootToMeter = .3048;
+        private const char FieldSeparator = ',';
+        private const string DebugFieldSeparator = "; ";
+
+        private const string DateTimeFormat = "yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'";
+
+        private static readonly CultureInfo invariantCulture = InvariantCulture;
+
         #region Basic Properties
-        [DataObjectField(true, true, false, sizeof(uint))]
         [field: FieldOffset(0)] public readonly uint PositionOfFirstByte { get; } // (0)
         [field: FieldOffset(4)] public readonly uint UnknownAt4 { get; } // (4) In my files it is always 10.
         [field: FieldOffset(8)] public readonly ushort LengthOfFrame { get; } // (8)
@@ -155,6 +166,7 @@ namespace SL3Reader
         #region Extended Properties
         [FieldOffset(128)] private readonly uint lastPrimaryScanFrameOffset;
         public readonly uint LastPrimaryScanFrameOffset => FrameType is FrameType.Extended ? lastPrimaryScanFrameOffset : throw new InvalidFrameTypeException(); // (128)
+        
         [FieldOffset(132)] private readonly uint lastSecondaryScanFrameOffset;
         public readonly uint LastSecondaryScanFrameOffset => FrameType is FrameType.Extended ? lastSecondaryScanFrameOffset : throw new InvalidFrameTypeException();  // (132)
         [FieldOffset(136)] public readonly uint lastDownScanFrameOffset;
@@ -181,51 +193,52 @@ namespace SL3Reader
         #endregion Extended properties
 
         #region Search support
-        public readonly bool GetNearest3DFrame(List<IFrame> candidates, [NotNullWhen(true)] out IFrame? frame3D) =>
-            GetNearestFrame(candidates, this, out frame3D);
+        //public readonly bool GetNearest3DFrame(List<IFrame> candidates, [NotNullWhen(true)] out IFrame? frame3D) =>
+        //    GetNearestFrame(candidates, this, out frame3D);
 
-        public static bool GetNearestFrame(List<IFrame> candidates,
-                                           in IFrame currentFrame,
-                                           [NotNullWhen(true)] out IFrame? frame)
-        {
-            int count;
-            if (currentFrame.FrameType == FrameType.Extended &&
-                candidates is not null &&
-                (count = candidates.Count) > 0)
-            {
-                if (currentFrame.Last3DFrameOffset == 0)
-                {
-                    IFrame previousFrame = candidates[0];
-                    IFrame nextFrame = count > 1 ? candidates[1] : previousFrame;
-                    frame = SelectClosestFrame(previousFrame, nextFrame, currentFrame.Milliseconds);
-                    return true;
-                }
+        //public static bool GetNearestFrame(List<IFrame> candidates,
+        //                                   in IFrame currentFrame,
+        //                                   [NotNullWhen(true)] out IFrame? frame)
+        //{
+        //    int count;
+        //    if (currentFrame.FrameType == FrameType.Extended &&
+        //        candidates is not null &&
+        //        (count = candidates.Count) > 0)
+        //    {
+        //        if (currentFrame.Last3DFrameOffset == 0)
+        //        {
+        //            IFrame previousFrame = candidates[0];
+        //            IFrame nextFrame = count > 1 ? candidates[1] : previousFrame;
+        //            frame = SelectClosestFrame(previousFrame, nextFrame, currentFrame.Milliseconds);
+        //            return true;
+        //        }
 
-                for (int i = 0; i < count; i++)
-                {
-                    if (candidates[i].PositionOfFirstByte == currentFrame.Last3DFrameOffset)
-                    {
-                        IFrame previousFrame = candidates[i++];
-                        IFrame nextFrame = i < count ? candidates[i] : previousFrame;
-                        frame = SelectClosestFrame(previousFrame, nextFrame, currentFrame.Milliseconds);
-                        return true;
-                    }
-                }
-            }
-            frame = null;
-            return false;
+        //        for (int i = 0; i < count; i++)
+        //        {
+        //            if (candidates[i].PositionOfFirstByte == currentFrame.Last3DFrameOffset)
+        //            {
+        //                IFrame previousFrame = candidates[i++];
+        //                IFrame nextFrame = i < count ? candidates[i] : previousFrame;
+        //                frame = SelectClosestFrame(previousFrame, nextFrame, currentFrame.Milliseconds);
+        //                return true;
+        //            }
+        //        }
+        //    }
+        //    frame = null;
+        //    return false;
 
-            static IFrame SelectClosestFrame(IFrame previousFrame, IFrame nextFrame, uint milliseconds)
-            {
-                return Math.Abs(previousFrame.Milliseconds - milliseconds) <
-                          Math.Abs(nextFrame.Milliseconds - milliseconds) ?
-                          previousFrame : nextFrame;
-            }
-        }
+        //    static IFrame SelectClosestFrame(IFrame previousFrame, IFrame nextFrame, uint milliseconds)
+        //    {
+        //        return Math.Abs(previousFrame.Milliseconds - milliseconds) <
+        //                  Math.Abs(nextFrame.Milliseconds - milliseconds) ?
+        //                  previousFrame : nextFrame;
+        //    }
+        //}
         #endregion Search support
 
         #region DateTime support
         private static DateTime timestampBase;
+        [SkipLocalsInit, MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static void InitTimestampBase(uint hardwareTime) =>
                  timestampBase = DateTimeOffset.FromUnixTimeSeconds(hardwareTime)
                  .UtcDateTime;
@@ -233,8 +246,6 @@ namespace SL3Reader
         #endregion
 
         #region WGS84
-        private const double PolarRadius = 6356752.3142d; // Lowrance uses float, causing truncated precision.
-        private const double RadToDeg = 360d / double.Tau;
         public double Longitude => X / PolarRadius * RadToDeg;
         public double Latitude => RadToDeg * double.Atan(double.Sinh(Y / PolarRadius));
         #endregion WGS84
@@ -242,11 +253,11 @@ namespace SL3Reader
         #region String generation
         public readonly override string ToString()
         {
-            IFormatProvider invariantCulture = InvariantCulture;
-            return string.Join(',', new string[]
+            CultureInfo invariantCulture = Frame.invariantCulture;
+            return string.Join(FieldSeparator, new string[17]
         {
             CampaignID.ToString(),
-            Timestamp.ToString("yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'", invariantCulture),
+            Timestamp.ToString(DateTimeFormat, invariantCulture),
             SurveyType.ToString(),
             WaterDepth.ToString(invariantCulture),
             Longitude.ToString(invariantCulture),
@@ -264,29 +275,26 @@ namespace SL3Reader
             Milliseconds.ToString()});
         }
 
-        private readonly string GetDebuggerDisplay() =>
-            string.Join("; ", new string[5]
+        private readonly string GetDebuggerDisplay() {
+            CultureInfo invariantCulture = Frame.invariantCulture;
+            return string.Join(DebugFieldSeparator, new string[5]
             {
                 SurveyType.ToString(),
-                WaterDepth.ToString(InvariantCulture) + '′',
-                MinRange.ToString(InvariantCulture),
-                MaxRange.ToString(InvariantCulture),
+                WaterDepth.ToString(invariantCulture) + '′',
+                MinRange.ToString(invariantCulture),
+                MaxRange.ToString(invariantCulture),
                 FrameType.ToString()
             });
+        }
         #endregion String generation
 
         #region Unpack support
-        public (double x, double y, double v, double t, double d) UnpackNavParameters()
-        {
-            const double KnotsToMPS = 1852d / 3600d;
-            const double HalfPI = double.Pi / 2d;
-            const double MillisecondsToSeconds = 1d / 1000d;
-
-            return (X, Y,
+        public readonly (double x, double y, double z, double v, double t, double d) QueryMetric() => 
+                   (X, Y,
+                    FootToMeter * GNSSAltitude,
                     KnotsToMPS * GNSSSpeed,
                     MillisecondsToSeconds * Milliseconds,
                     Math.Tau - GNSSHeading + HalfPI);
-        }
         #endregion Unpack support
     }
 }

@@ -16,6 +16,7 @@ using System.Buffers;
 using System.Runtime.Intrinsics.Arm;
 
 namespace SL3Reader {
+
     [DebuggerDisplay("{Name}")]
     public class SL3Reader :
         FileStream,
@@ -35,22 +36,19 @@ namespace SL3Reader {
 
         private List<IFrame> CreateNewFrameList(IEnumerable<IFrame> collection) {
             List<IFrame> localFrames = CreateNewFrameList();
-            InitIndexSupport(localFrames.Capacity);
+            
+            using (IEnumerator<IFrame> en = collection!.GetEnumerator()) {
+                int n = 0;
+                InitIndexSupport(localFrames.Capacity);
+                SortedDictionary<SurveyType, List<int>> typeIndex = indexByType;
+                while (en.MoveNext()) {
+                    IFrame frame = en.Current;
+                    localFrames.Add(frame);
+                    typeIndex[frame.SurveyType].Add(n++);
+                }
 
-            SortedDictionary<SurveyType, List<int>> typeIndex = indexByType;
-            SortedDictionary<uint, List<int>> campaignIndex = indexByCampaign;
-
-            int n = 0;
-            foreach (IFrame frame in collection) {
-                localFrames.Add(frame);
-                typeIndex[frame.SurveyType].Add(n);
-                if (campaignIndex.TryGetValue(frame.CampaignID, out List<int> campaignList))
-                    campaignList.Add(n);
-                else
-                    campaignIndex.Add(frame.CampaignID, new List<int>(9) { n });
-
-                n++;
             }
+
             return localFrames;
         }
 
@@ -71,10 +69,8 @@ namespace SL3Reader {
 
         #region Indices
         private SortedDictionary<SurveyType, List<int>> indexByType;
-        private SortedDictionary<uint, List<int>> indexByCampaign;
         public SortedDictionary<SurveyType, List<int>> IndexByType => indexByType;
-        // Maybe useless, due to the drifting in 3D.
-        public SortedDictionary<uint, List<int>> IndexByCampaign => indexByCampaign;
+
         private void InitIndexSupport(int estimatedCount) {
             indexByType = new()
             {
@@ -84,17 +80,16 @@ namespace SL3Reader {
                 { SurveyType.LeftSidescan,new() },
                 { SurveyType. RightSidescan, new() },
                 { SurveyType.SideScan, new(estimatedCount / 10) },
-                { SurveyType.Unknown6,new() },
+                { SurveyType.Unknown6, new() },
                 { SurveyType.Unknown7, new(estimatedCount / 4) },
                 { SurveyType.Unknown8, new(estimatedCount / 4) },
                 { SurveyType.ThreeDimensional, new(estimatedCount / 10) },
                 { SurveyType.DebugDigital, new() },
-                { SurveyType.DebugNoise,new() }
+                { SurveyType.DebugNoise, new() }
             };
-
-            indexByCampaign = new();
         }
         #endregion Indices
+        [SkipLocalsInit]
         public unsafe SL3Reader(string path) :
            base(path, FileMode.Open, FileAccess.Read,
            FileShare.Read, 4096, FileOptions.RandomAccess) {
@@ -178,12 +173,12 @@ namespace SL3Reader {
         public void ExportImagery(string path, SurveyType surveyType = SurveyType.SideScan) {
             ArgumentNullException.ThrowIfNull(nameof(path));
 
-            if (Directory.Exists(path))
-                Directory.Delete(path, true);
-            path = Directory.CreateDirectory(path).FullName;
+            if (Directory.Exists(path!))
+                Directory.Delete(path!, true);
+            path = Directory.CreateDirectory(path!).FullName;
 
-            var frames = Frames;
-            int frameCount = frames.Count; // Initialize the frames.
+            IReadOnlyList<IFrame> frames = Frames; // Initialize the frames.
+            int frameCount = frames.Count;
             if (frameCount < 1) return;
 
             List<int> imageFrames = IndexByType[surveyType];
@@ -289,7 +284,7 @@ namespace SL3Reader {
                        centralY = augmentedCoordinate.Y,
                        centralZ = .3048 * augmentedCoordinate.Altitude;
 
-                (double sin, double cos) = 
+                (double sin, double cos) =
                     double.SinCos((magneticHeading ? frame.MagneticHeading : frame.GNSSHeading) - .5 * double.Pi);
 
                 stringArray[0] = frame.CampaignID.ToString();
@@ -396,14 +391,13 @@ namespace SL3Reader {
             int frameCount = frames.Count; // Initialize the frames.
             if (frameCount < 1) return;
 
-            (double x0, double y0, double v0, double t0, double d0) =
-                frames[0].UnpackNavParameters();
-            coordinates.Add(new(x0, y0, d0, frames[0].GNSSAltitude, 0));
+            (double x0, double y0, double z0, double v0, double t0, double d0) = frames[0].QueryMetric();
+            coordinates.Add(new(x0, y0, d0, z0, 0));
 
             for (int i = 1; i < frameCount; i++) {
                 IFrame frame = frames[i];
-                (double x1, double y1, double v1, double t1, double d1) =
-                    frame.UnpackNavParameters();
+                (double x1, double y1, double z1, double v1, double t1, double d1) =
+                    frame.QueryMetric();
 
                 (double sin0, double cos0) = double.SinCos(d0);
                 (double sin1, double cos1) = double.SinCos(d1);
@@ -421,8 +415,8 @@ namespace SL3Reader {
 
                 if (frame.SurveyType is SurveyType.Primary or SurveyType.Secondary or
                     SurveyType.Unknown7 or SurveyType.Unknown8) {
+
                     double dy = y0 - y1;
-                    //y0 = y1 + double.CopySign(double.Clamp((dy / lim),-lim,lim), dy);
                     if (double.Abs(dy) > lim)
                         y0 = y1 + double.CopySign(lim, dy);
 
@@ -430,7 +424,7 @@ namespace SL3Reader {
                     if (double.Abs(dx) > lim)
                         x0 = x1 + double.CopySign(lim, dx);
                 }
-                coordinates.Add(new(x0, y0, d0, frame.GNSSAltitude, 0));
+                coordinates.Add(new(x0, y0, d0, z1, 0));
             }
         }
 
@@ -452,6 +446,7 @@ namespace SL3Reader {
             readonly unsafe IFrame IEnumerator<IFrame>.Current => *pCurrent;
             readonly unsafe object IEnumerator.Current => *pCurrent;
 
+            [SkipLocalsInit]
             public unsafe Enumerator(SL3Reader source) {
                 bool lockTaken = false;
 
@@ -470,13 +465,14 @@ namespace SL3Reader {
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private unsafe void InitTimestamp() {
+            private unsafe readonly void InitTimestamp() {
                 source.ReadExactly(new(pCurrent, Frame.MinimumInitSize)); // We won't have to read the whole
                 // frame: just till the end of pCurrent->HardwareTime.
                 Frame.InitTimestampBase(pCurrent->HardwareTime);
             }
 
-            unsafe bool IEnumerator.MoveNext() {
+            [SkipLocalsInit]
+            unsafe readonly bool IEnumerator.MoveNext() {
                 Frame* currentFrame = pCurrent;
                 SL3Reader stream = source;
 
@@ -486,7 +482,7 @@ namespace SL3Reader {
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void Reset() => source.SeekExactly(SLFileHeader.Size);
+            public readonly void Reset() => source.SeekExactly(SLFileHeader.Size);
             unsafe void IDisposable.Dispose() {
                 Monitor.Exit(source);
                 AlignedFree(pCurrent);

@@ -15,16 +15,16 @@ namespace SL3Reader
 
         public readonly double X { get; }
         public readonly double Y { get; }
-        public double Altitude { get; }
+        public readonly double Altitude { get; }
         public readonly double Heading { get; }
         public readonly double Distance { get; }
 
 
         public override readonly string ToString()
         {
-            CultureInfo provider = CultureInfo.InvariantCulture;
-            return X.ToString(provider) + ',' +
-                   Y.ToString(provider);
+            CultureInfo invariantCulture = CultureInfo.InvariantCulture;
+            return X.ToString(invariantCulture) + ',' +
+                   Y.ToString(invariantCulture);
         }
     }
 }
