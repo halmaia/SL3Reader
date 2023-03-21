@@ -14,6 +14,9 @@ using System.Diagnostics.Metrics;
 using System.Text;
 using System.Buffers;
 using System.Runtime.Intrinsics.Arm;
+using System.Diagnostics.CodeAnalysis;
+using System.ComponentModel;
+using System.ComponentModel.Design;
 
 namespace SL3Reader {
 
@@ -28,7 +31,7 @@ namespace SL3Reader {
         private List<IFrame> frames;
         public IReadOnlyList<IFrame> Frames => frames ??= CreateNewFrameList(this);
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining), SkipLocalsInit]
         private List<IFrame> CreateNewFrameList() {
             const long averageFrameSize = 2118L; // Empirically set value to avoid frequent resize of the underlying array.
             return new((int)(Length / averageFrameSize));
@@ -36,15 +39,15 @@ namespace SL3Reader {
 
         private List<IFrame> CreateNewFrameList(IEnumerable<IFrame> collection) {
             List<IFrame> localFrames = CreateNewFrameList();
-            
+
             using (IEnumerator<IFrame> en = collection!.GetEnumerator()) {
-                int n = 0;
+                int i = 0;
                 InitIndexSupport(localFrames.Capacity);
-                SortedDictionary<SurveyType, List<int>> typeIndex = indexByType;
+                SortedDictionary<SurveyType, List<int>> typeIndex = IndexByType;
                 while (en.MoveNext()) {
                     IFrame frame = en.Current;
-                    localFrames.Add(frame);
-                    typeIndex[frame.SurveyType].Add(n++);
+                    localFrames.Add(frame); // TODO: detect millisecond error!
+                    typeIndex[frame.SurveyType].Add(i++);
                 }
 
             }
@@ -68,11 +71,10 @@ namespace SL3Reader {
         #endregion Augmented Coordinates
 
         #region Indices
-        private SortedDictionary<SurveyType, List<int>> indexByType;
-        public SortedDictionary<SurveyType, List<int>> IndexByType => indexByType;
+        public SortedDictionary<SurveyType, List<int>> IndexByType { get; private set; }
 
         private void InitIndexSupport(int estimatedCount) {
-            indexByType = new()
+            IndexByType = new()
             {
                 { SurveyType.Primary, new(estimatedCount / 8) },
                 { SurveyType.Secondary, new(estimatedCount / 8) },
@@ -105,37 +107,25 @@ namespace SL3Reader {
             AugmentTrajectory();
         }
 
-        public unsafe void ExportToCSV(string path, SurveyType? filter = null) {
-            // StreamWriter is set to ASCII. If you add non-ASCII chars, revert to UTF-8.
-            const string CSVHeader = "CampaignID,DateTime,SurveyType,WaterDepth,Longitude,Latitude,GNSSAltitude,GNSSHeading,GNSSSpeed,MagneticHeading,MinRange,MaxRange,WaterTemperature,WaterSpeed,HardwareTime,Frequency,Milliseconds,AugmentedX,AugmentedY";
+        public void ExportToCSV(string path, [ConstantExpected] SurveyType filter = SurveyType.All) {
+            File.WriteAllLines(path,
+                EnumerateFrames(Frames, AugmentedCoordinates, filter is SurveyType.All ? null : IndexByType[filter]));
 
+            static IEnumerable<string> EnumerateFrames(
+                                                        IReadOnlyList<IFrame> frames,
+                                                        List<GeoPoint> augmentedCoordinates,
+                                                        IReadOnlyList<int>? typeList = null) {
 
-            FileStreamOptions fileStreamOptions = new() { Access = FileAccess.Write, Mode = FileMode.Create, Share = FileShare.Read, Options = FileOptions.SequentialScan };
-            using StreamWriter streamWriter = new(path, Encoding.ASCII, fileStreamOptions); // Delay file open
-            streamWriter.WriteLine(CSVHeader);
+                yield return "CampaignID[#],DateTime[UTC],SurveyType,WaterDepth[Feet],Longitude[°WGS48],Latitude[°WGS84],GNSSAltitude[Feet_WGS84Ellipsoid],GNSSHeading[rad_azimuth],GNSSSpeed[m/s],MagneticHeading[rad_azimuth],MinRange[Feet],MaxRange[Feet],WaterTemperature[°C],WaterSpeed[Feet],HardwareTime[ms],Frequency,Milliseconds[ms],AugmentedX[m],AugmentedY[m]";
 
-            if (filter is SurveyType internalFilter) {
-                List<int> typeList = indexByType[internalFilter];
-                int count = typeList.Count;
-                var frames = Frames;
+                if (typeList is null)
+                    for (int i = 0, count = frames.Count; i < count; i++)
+                        yield return frames[i].ToString() + ',' + augmentedCoordinates[i];
 
-                for (int i = 0; i < count; i++) {
-                    streamWriter.WriteLine(frames[typeList[i]].ToString()); // Write & WriteLine call the same
-                                                                            //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
-                                                                            // so adding the '\n' manually has no effect just causing platform dependent issues. 
-                }
+                else
+                    for (int i = 0, count = typeList.Count, j = count != 0 ? typeList![0] : 0; i < count; i++, j = typeList![i])
+                        yield return frames[j].ToString() + ',' + augmentedCoordinates[j];
             }
-            else {
-                for (int i = 0, frameCount = Frames.Count; i < frameCount; i++) {
-                    GeoPoint augmentedCoordinate = AugmentedCoordinates[i];
-                    streamWriter.WriteLine(Frames[i].ToString() + ',' +
-                                           augmentedCoordinate.ToString());
-                    // Write & WriteLine call the same
-                    //  "private unsafe void WriteSpan(ReadOnlySpan<char> buffer, bool appendNewLine)"
-                    // so adding the '\n' manually has no effect just causing platform dependent issues.                                                                               // so ading the '\n' manually has no effect just causing platform dependent issues. 
-                }
-            }
-            streamWriter.Close();
         }
 
         private List<int> GetBreakPoints(List<int> framesToCheck, out int contiguousLength) {
@@ -263,7 +253,7 @@ namespace SL3Reader {
             if (frames3DLength < 1) return;
 
             using StreamWriter streamWriter = File.CreateText(path);
-            streamWriter.WriteLine("CampaignID,DateTime,X,Y,Z,Angle,Distance,Reliability");
+            streamWriter.WriteLine("CampaignID,DateTime,X[Lowrance_m],Y[Lowrance_m],Z[m_WGS84Ellipsoid],Angle[°],Distance[m],Reliability");
 
             List<GeoPoint> augmentedCoordinates = AugmentedCoordinates;
             ThreeDimensionalFrameHeader header = new();
@@ -392,7 +382,8 @@ namespace SL3Reader {
             if (frameCount < 1) return;
 
             (double x0, double y0, double z0, double v0, double t0, double d0) = frames[0].QueryMetric();
-            coordinates.Add(new(x0, y0, d0, z0, 0));
+            coordinates.Add(new(x0, y0, d0, z0));
+
 
             for (int i = 1; i < frameCount; i++) {
                 IFrame frame = frames[i];
@@ -424,7 +415,7 @@ namespace SL3Reader {
                     if (double.Abs(dx) > lim)
                         x0 = x1 + double.CopySign(lim, dx);
                 }
-                coordinates.Add(new(x0, y0, d0, z1, 0));
+                coordinates.Add(new(x0, y0, d0, z1));
             }
         }
 
@@ -467,7 +458,7 @@ namespace SL3Reader {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             private unsafe readonly void InitTimestamp() {
                 source.ReadExactly(new(pCurrent, Frame.MinimumInitSize)); // We won't have to read the whole
-                // frame: just till the end of pCurrent->HardwareTime.
+                                                                          // frame: just till the end of pCurrent->HardwareTime.
                 Frame.InitTimestampBase(pCurrent->HardwareTime);
             }
 

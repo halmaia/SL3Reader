@@ -17,7 +17,6 @@ namespace SL3Reader
             R = r;
             A = a;
         }
-
         public override readonly string ToString() => string.Join(';', R, G, B, A);
     };
 }

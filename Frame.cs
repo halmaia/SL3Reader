@@ -5,10 +5,8 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Globalization;
 
-namespace SL3Reader
-{
-    public interface IFrame
-    {
+namespace SL3Reader {
+    public interface IFrame {
         #region Basic properties
         uint PositionOfFirstByte { get; }
         uint UnknownAt4 { get; }
@@ -86,8 +84,7 @@ namespace SL3Reader
 
     [StructLayout(LayoutKind.Explicit, Size = ExtendedSize)]
     [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
-    public readonly struct Frame : IFrame
-    {
+    public readonly struct Frame : IFrame {
         public const int ExtendedSize = 168;
         public const int BasicSize = 128;
         public const int MinimumInitSize = 44;
@@ -156,8 +153,7 @@ namespace SL3Reader
 
         #region Type support
         // Derived:
-        public readonly FrameType FrameType
-        {
+        public readonly FrameType FrameType {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => SurveyType is SurveyType.Unknown7 or SurveyType.Unknown8 ? FrameType.Basic : FrameType.Extended;
         }
@@ -166,7 +162,7 @@ namespace SL3Reader
         #region Extended Properties
         [FieldOffset(128)] private readonly uint lastPrimaryScanFrameOffset;
         public readonly uint LastPrimaryScanFrameOffset => FrameType is FrameType.Extended ? lastPrimaryScanFrameOffset : throw new InvalidFrameTypeException(); // (128)
-        
+
         [FieldOffset(132)] private readonly uint lastSecondaryScanFrameOffset;
         public readonly uint LastSecondaryScanFrameOffset => FrameType is FrameType.Extended ? lastSecondaryScanFrameOffset : throw new InvalidFrameTypeException();  // (132)
         [FieldOffset(136)] public readonly uint lastDownScanFrameOffset;
@@ -192,50 +188,6 @@ namespace SL3Reader
 
         #endregion Extended properties
 
-        #region Search support
-        //public readonly bool GetNearest3DFrame(List<IFrame> candidates, [NotNullWhen(true)] out IFrame? frame3D) =>
-        //    GetNearestFrame(candidates, this, out frame3D);
-
-        //public static bool GetNearestFrame(List<IFrame> candidates,
-        //                                   in IFrame currentFrame,
-        //                                   [NotNullWhen(true)] out IFrame? frame)
-        //{
-        //    int count;
-        //    if (currentFrame.FrameType == FrameType.Extended &&
-        //        candidates is not null &&
-        //        (count = candidates.Count) > 0)
-        //    {
-        //        if (currentFrame.Last3DFrameOffset == 0)
-        //        {
-        //            IFrame previousFrame = candidates[0];
-        //            IFrame nextFrame = count > 1 ? candidates[1] : previousFrame;
-        //            frame = SelectClosestFrame(previousFrame, nextFrame, currentFrame.Milliseconds);
-        //            return true;
-        //        }
-
-        //        for (int i = 0; i < count; i++)
-        //        {
-        //            if (candidates[i].PositionOfFirstByte == currentFrame.Last3DFrameOffset)
-        //            {
-        //                IFrame previousFrame = candidates[i++];
-        //                IFrame nextFrame = i < count ? candidates[i] : previousFrame;
-        //                frame = SelectClosestFrame(previousFrame, nextFrame, currentFrame.Milliseconds);
-        //                return true;
-        //            }
-        //        }
-        //    }
-        //    frame = null;
-        //    return false;
-
-        //    static IFrame SelectClosestFrame(IFrame previousFrame, IFrame nextFrame, uint milliseconds)
-        //    {
-        //        return Math.Abs(previousFrame.Milliseconds - milliseconds) <
-        //                  Math.Abs(nextFrame.Milliseconds - milliseconds) ?
-        //                  previousFrame : nextFrame;
-        //    }
-        //}
-        #endregion Search support
-
         #region DateTime support
         private static DateTime timestampBase;
         [SkipLocalsInit, MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -251,25 +203,24 @@ namespace SL3Reader
         #endregion WGS84
 
         #region String generation
-        public readonly override string ToString()
-        {
+        public readonly override string ToString() {
             CultureInfo invariantCulture = Frame.invariantCulture;
             return string.Join(FieldSeparator, new string[17]
         {
             CampaignID.ToString(),
             Timestamp.ToString(DateTimeFormat, invariantCulture),
             SurveyType.ToString(),
-            WaterDepth.ToString(invariantCulture),
-            Longitude.ToString(invariantCulture),
-            Latitude.ToString(invariantCulture),
-            GNSSAltitude.ToString(invariantCulture),
+            WaterDepth.ToString("0.###", invariantCulture),
+            Longitude.ToString("0.#######", invariantCulture),
+            Latitude.ToString("0.#######", invariantCulture),
+            GNSSAltitude.ToString("0.###", invariantCulture),
             GNSSHeading.ToString(invariantCulture),
-            GNSSSpeed.ToString(invariantCulture),
+            GNSSSpeed.ToString("0.####", invariantCulture),
             MagneticHeading.ToString(invariantCulture),
-            MinRange.ToString(invariantCulture),
-            MaxRange.ToString(invariantCulture),
-            WaterTemperature.ToString(invariantCulture),
-            WaterSpeed.ToString(invariantCulture),
+            MinRange.ToString("0.###", invariantCulture),
+            MaxRange.ToString("0.###", invariantCulture),
+            WaterTemperature.ToString("0.#",invariantCulture),
+            WaterSpeed.ToString("0.####", invariantCulture),
             HardwareTime.ToString(),
             Frequency.ToString(),
             Milliseconds.ToString()});
@@ -289,7 +240,7 @@ namespace SL3Reader
         #endregion String generation
 
         #region Unpack support
-        public readonly (double x, double y, double z, double v, double t, double d) QueryMetric() => 
+        public readonly (double x, double y, double z, double v, double t, double d) QueryMetric() =>
                    (X, Y,
                     FootToMeter * GNSSAltitude,
                     KnotsToMPS * GNSSSpeed,

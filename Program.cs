@@ -61,7 +61,7 @@ namespace SL3Reader {
                     break;
                 case "-u7":
                     sl3reader.ExportImagery(output, SurveyType.Unknown7);
-                    PrintGreen("Frame type №7 imagery exported successfully.\n");
+                    PrintGreen("Frame type Nr.7 imagery exported successfully.\n");
                     break;
                 default:
                     WriteLine("Invalid third argument (" + expSelector + ").");
