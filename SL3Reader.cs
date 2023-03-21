@@ -152,7 +152,7 @@ namespace SL3Reader {
                  maxIndex = breakpoints.Count - 1,
                  delta;
                  j < maxIndex;
-                 j += 2) {
+                 j ++) {
                 if (contiguousLength < (delta = breakpoints[1 + j] - breakpoints[j]))
                     contiguousLength = delta;
             }

@@ -2,10 +2,8 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices.Marshalling;
 
-namespace SL3Reader
-{
-    public static class BitmapHelper
-    {
+namespace SL3Reader {
+    public static class BitmapHelper {
         public const int BitmapCombinedHeaderSize =
                             BitmapFileHeader.Size +
                             BitmapInfoHeader.Size +
@@ -280,8 +278,7 @@ namespace SL3Reader
             56,187,240,0 /* End Palette */
        };
 
-        public static byte[] CreateBuffer(int maxHeight, int maxWidth)
-        {
+        public static byte[] CreateBuffer(int maxHeight, int maxWidth) {
             // (maxHeight * (maxWidth + (4 - maxWidth % 4))));
             byte[] buffer = GC.AllocateUninitializedArray<byte>(
                             BitmapCombinedHeaderSize +
@@ -294,15 +291,14 @@ namespace SL3Reader
             int height, int width,
             out int fullStride,
             out Span<byte> fileBuffer,
-            out Span<byte> pixelData)
-        {
+            out Span<byte> pixelData) {
             fullStride = width; //width + (4 - (width % 4));
             fixed (byte* pBuffer = &buffer[0]) // Just formal: buffer is pre-pinned by the GC.
             {
                 BitmapFileHeader* pFileHeader = (BitmapFileHeader*)pBuffer;
                 int fileSize = (int)pFileHeader->Update(width, height);
-                ((BitmapInfoHeader*)(pBuffer + BitmapFileHeader.Size))->Update (width, height);
-                fileBuffer = new Span<byte>(pBuffer, fileSize); 
+                ((BitmapInfoHeader*)(pBuffer + BitmapFileHeader.Size))->Update(width, height);
+                fileBuffer = new Span<byte>(pBuffer, fileSize);
                 pixelData = fileBuffer[BitmapCombinedHeaderSize..];
             }
         }
