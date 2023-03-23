@@ -5,8 +5,8 @@ namespace SL3Reader {
     public readonly ref struct InterferometricMeasurement
     {
         public const int Size = 2 * sizeof(float);
-        public readonly float Delta { get; }
-        public readonly float Depth { get; }
+        public readonly float Delta;
+        public readonly float Depth;
         public override readonly string ToString() => $"{Delta};{Depth}";
     }
 }

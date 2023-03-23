@@ -109,14 +109,14 @@ namespace SL3Reader {
                 SortedDictionary<SurveyType, List<int>> indexByType = sl3reader.IndexByType;
 
                 WriteLine("File statistics:");
-                WriteLine("\tNumber of frames: " + sl3reader.Frames.Count.ToString());
-                WriteLine("\tNumber of primary frames: " + indexByType[SurveyType.Primary].Count.ToString());
-                WriteLine("\tNumber of secondary frames: " + indexByType[SurveyType.Secondary].Count.ToString());
-                WriteLine("\tNumber of left sidescan frames: " + indexByType[SurveyType.LeftSidescan].Count.ToString());
-                WriteLine("\tNumber of right sidescan frames: " + indexByType[SurveyType.RightSidescan].Count.ToString());
-                WriteLine("\tNumber of sidescan frames: " + indexByType[SurveyType.SideScan].Count.ToString());
-                WriteLine("\tNumber of downscan frames: " + indexByType[SurveyType.DownScan].Count.ToString());
-                WriteLine("\tNumber of 3D frames: " + indexByType[SurveyType.ThreeDimensional].Count.ToString());
+                WriteLine("\tNumber of frames: " + sl3reader.Frames.Count.ToString("# ##0"));
+                WriteLine("\tNumber of primary frames: " + indexByType[SurveyType.Primary].Count.ToString("# ##0"));
+                WriteLine("\tNumber of secondary frames: " + indexByType[SurveyType.Secondary].Count.ToString("# ##0"));
+                WriteLine("\tNumber of left sidescan frames: " + indexByType[SurveyType.LeftSidescan].Count.ToString("# ##0"));
+                WriteLine("\tNumber of right sidescan frames: " + indexByType[SurveyType.RightSidescan].Count.ToString("# ##0"));
+                WriteLine("\tNumber of sidescan frames: " + indexByType[SurveyType.SideScan].Count.ToString("# ##0"));
+                WriteLine("\tNumber of downscan frames: " + indexByType[SurveyType.DownScan].Count.ToString("# ##0"));
+                WriteLine("\tNumber of 3D frames: " + indexByType[SurveyType.ThreeDimensional].Count.ToString("# ##0"));
                 
                 WriteLine();
                 PrintGreen("\nExport finished successfully.");

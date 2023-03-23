@@ -1,8 +1,9 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace SL3Reader {
-    [StructLayout(LayoutKind.Sequential, Size = Size)]
-    public readonly ref struct ThreeDimensionalFrameHeader
+    [StructLayout(LayoutKind.Sequential, Size = Size), SkipLocalsInit]
+    public readonly ref  struct ThreeDimensionalFrameHeader
     {
         public const int Size = 76;
 
