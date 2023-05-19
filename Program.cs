@@ -4,24 +4,29 @@ using static System.IO.Path;
 using static System.Console;
 using System.Runtime.CompilerServices;
 
-namespace SL3Reader {
-
-    public static class Program {
-        public static void Main(string[] args) {
-            if (args.Length != 3) {
+namespace SL3Reader
+{
+    public static class Program
+    {
+        public static void Main(string[] args)
+        {
+            if (args!.Length != 3) // Always non-null.
+            {
                 PrintUsage();
                 return;
             }
 
-            string input = GetFullPath(args[0]);
-            if (!Exists(input)) {
+            string input = GetFullPath(args![0]);
+            if (!Exists(input))
+            {
                 WriteLine("Input file not found!");
                 PrintUsage();
                 return;
             }
 
             string output = GetFullPath(args[1]);
-            if (!Exists(GetDirectoryName(output))) {
+            if (!Exists(GetDirectoryName(output)))
+            {
                 WriteLine("Directory not found for the output file!");
                 PrintUsage();
                 return;
@@ -30,7 +35,8 @@ namespace SL3Reader {
             using SL3Reader sl3reader = new(input);
 
             string expSelector = args[2].Trim().ToLowerInvariant();
-            switch (expSelector) {
+            switch (expSelector)
+            {
                 case "-3dm":
                     sl3reader.Export3D(output, false, true);
                     PrintGreen("3D content with magnetic heading exported successfully.\n");
@@ -48,7 +54,7 @@ namespace SL3Reader {
                     PrintGreen("Side scan imagery exported successfully.\n");
                     break;
                 case "-ps":
-                    sl3reader.ExportImagery(output,SurveyType.Primary);
+                    sl3reader.ExportImagery(output, SurveyType.Primary);
                     PrintGreen("Primary scan imagery exported successfully.\n");
                     break;
                 case "-ses":
@@ -73,17 +79,18 @@ namespace SL3Reader {
 
             return;
 
-            static void PrintUsage() {
+            static void PrintUsage()
+            {
                 WriteLine("Usage examples:\n");
 
                 WriteLine("To export route:");
-                
+
                 WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -route\n");
                 WriteLine("To export 3D points with magnetic heading (e.g. measured with devices like Precision–9):");
                 WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dm\n");
                 WriteLine("To export 3D points with GNSS heading (e.g. in-built GPS):");
                 WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dg\n");
-                
+
                 WriteLine("To export side scan imagery:");
                 WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ss\n");
                 WriteLine("To export primary scan imagery:");
@@ -105,7 +112,8 @@ namespace SL3Reader {
             }
 
             [SkipLocalsInit]
-            void PrintSummary() {
+            void PrintSummary()
+            {
                 SortedDictionary<SurveyType, List<int>> indexByType = sl3reader.IndexByType;
 
                 WriteLine("File statistics:");
@@ -117,14 +125,15 @@ namespace SL3Reader {
                 WriteLine("\tNumber of sidescan frames: " + indexByType[SurveyType.SideScan].Count.ToString("# ##0"));
                 WriteLine("\tNumber of downscan frames: " + indexByType[SurveyType.DownScan].Count.ToString("# ##0"));
                 WriteLine("\tNumber of 3D frames: " + indexByType[SurveyType.ThreeDimensional].Count.ToString("# ##0"));
-                
+
                 WriteLine();
                 PrintGreen("\nExport finished successfully.");
             }
 
             [SkipLocalsInit]
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            static void PrintGreen(string message) {
+            static void PrintGreen(string message)
+            {
                 ForegroundColor = ConsoleColor.Green;
                 WriteLine(message);
                 ForegroundColor = ConsoleColor.White;

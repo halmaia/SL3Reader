@@ -10,6 +10,7 @@ using Microsoft.Win32.SafeHandles;
 using System.Globalization;
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace SL3Reader
 {
@@ -209,6 +210,26 @@ namespace SL3Reader
                 using SafeFileHandle handle = File.OpenHandle(Path.Combine(path, prefix + final + ".bmp"),
                     FileMode.CreateNew, FileAccess.Write, FileShare.None, FileOptions.SequentialScan);
                 RandomAccess.Write(handle, fileBuffer, 0);
+
+                // World file
+                CultureInfo InvariantCulture = CultureInfo.InvariantCulture;
+                var firstStrip = AugmentedCoordinates[imageFrames[first]];
+                var lastStrip = AugmentedCoordinates[imageFrames[final - 1]];
+                var lastFrame = frames[imageFrames[final - 1]];
+
+                double XSize = -(lastStrip.Distance - firstStrip.Distance) / (final - first - 1);
+                double YSize = -10 * lastFrame.MaxRange * .3048 / numberOfColumns;
+                string WorldString = string.Join("\r\n",
+                        new string[6]
+                         {"0",
+                         YSize.ToString(InvariantCulture),
+                         XSize.ToString(InvariantCulture),
+                         "0",
+                         lastStrip.Distance.ToString(InvariantCulture),
+                         lastFrame.SurveyType is SurveyType.SideScan ? (-1400*YSize).ToString(): "0"}, 0, 6);
+
+                File.WriteAllText(Path.Combine(path, prefix + final + ".bpw"), WorldString);
+                // End world file
             }
         }
 
@@ -431,8 +452,8 @@ namespace SL3Reader
             if (frameCount < 1) return;
 
             (double x0, double y0, double z0, double v0, double t0, double d0) = frames[0].QueryMetric();
-            coordinates.Add(new(x0, y0, d0, z0));
-
+            coordinates.Add(new(x0, y0, d0, z0, 0)); // The first one.
+            double distance = 0, xprev = x0, yprev = y0;
 
             for (int i = 1; i < frameCount; i++)
             {
@@ -466,7 +487,9 @@ namespace SL3Reader
                     if (double.Abs(dx) > lim)
                         x0 = x1 + double.CopySign(lim, dx);
                 }
-                coordinates.Add(new(x0, y0, d0, z1));
+
+                coordinates.Add(new(x0, y0, d0, z1, distance += double.Hypot(x0 - xprev, y0 - yprev)));
+                xprev = x0; yprev = y0;
             }
         }
 

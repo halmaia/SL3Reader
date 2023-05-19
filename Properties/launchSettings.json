@@ -2,7 +2,7 @@
   "profiles": {
     "SL3Reader": {
       "commandName": "Project",
-      "commandLineArgs": "\"F:\\Sonar0000saar.sl3\" \"F:\\op.csv\" -3dm"
+      "commandLineArgs": "\"C:\\Users\\halmaia\\Desktop\\CardSave\\M2\\CPLE.sl3\" \"F:\\SS\" -ss"
     }
   }
 }
