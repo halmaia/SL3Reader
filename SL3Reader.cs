@@ -7,19 +7,9 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using static System.Runtime.InteropServices.NativeMemory;
 using Microsoft.Win32.SafeHandles;
-using System.Numerics;
 using System.Globalization;
-using System.Security.Cryptography;
-using System.Diagnostics.Metrics;
-using System.Text;
 using System.Buffers;
-using System.Runtime.Intrinsics.Arm;
 using System.Diagnostics.CodeAnalysis;
-using System.ComponentModel;
-using System.ComponentModel.Design;
-using System.Reflection.Metadata;
-using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 
 namespace SL3Reader
 {
@@ -282,7 +272,6 @@ namespace SL3Reader
 
             using StreamWriter streamWriter = File.CreateText(path);
             streamWriter.WriteLine("CampaignID,DateTime,X[Lowrance_m],Y[Lowrance_m],Z[m_WGS84Ellipsoid],Depth[m],Angle[°],Distance[m],Reliability");
-
 
             string[] stringArray = GC.AllocateUninitializedArray<string>(9);
 
