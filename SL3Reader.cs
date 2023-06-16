@@ -16,12 +16,11 @@ namespace SL3Reader
     public class SL3Reader : IDisposable
     {
         #region Frame support
-        private List<nuint> Frames { get; }
+        public List<nuint> Frames { get; }
         #endregion Frame support
-
+        // TODO: Integrate into the constructor:
         #region Augmented Coordinates
         private List<GeoPoint> augmentedCoordinates;
-        private bool disposedValue;
 
         public List<GeoPoint> AugmentedCoordinates => augmentedCoordinates ??= CreateNewCoordinateList();
         private List<GeoPoint> CreateNewCoordinateList()
@@ -499,6 +498,7 @@ namespace SL3Reader
         }
 
         #region Dispose Pattern
+        private bool disposedValue;
         protected virtual void Dispose(bool disposing)
         {
             if (!disposedValue)
