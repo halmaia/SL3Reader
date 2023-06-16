@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -19,11 +20,14 @@ namespace SL3Reader
         public readonly short Reserved { get; }
 
         [SkipLocalsInit]
-        public readonly override string ToString() => 
+        public readonly override string ToString() =>
             FileFormat.ToString() + " (" + BlockSize.ToString() + ')';
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly bool IsValidFormat([ConstantExpected] LogFileFormat fileFormatToTest) => 
-            FileFormat == fileFormatToTest;
+        public readonly void ThrowIfInvalidFormatDetected()
+        {
+            if (FileFormat != LogFileFormat.SL3)
+                throw new InvalidDataException("Unsupported file type. Expected type SL3.");
+        }
     }
 }

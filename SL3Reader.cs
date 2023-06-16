@@ -1,67 +1,28 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
-using System.Threading;
-using static System.Runtime.InteropServices.NativeMemory;
 using Microsoft.Win32.SafeHandles;
 using System.Globalization;
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
+using System.IO.MemoryMappedFiles;
 
 namespace SL3Reader
 {
 
     [DebuggerDisplay("{Name}")]
-    public class SL3Reader :
-        FileStream,
-        IEnumerable<IFrame>,
-        IEnumerable,
-        IReadOnlyList<IFrame>,
-        IReadOnlyCollection<IFrame>
+    public class SL3Reader : IDisposable
     {
         #region Frame support
-        private List<IFrame> frames;
-        public IReadOnlyList<IFrame> Frames => frames ??= CreateNewFrameList(this);
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining), SkipLocalsInit]
-        private List<IFrame> CreateNewFrameList()
-        {
-            const long averageFrameSize = 2118L; // Empirically set value to avoid frequent resize of the underlying array.
-            return new((int)(Length / averageFrameSize));
-        }
-
-        private List<IFrame> CreateNewFrameList(IEnumerable<IFrame> collection)
-        {
-            List<IFrame> localFrames = CreateNewFrameList();
-
-            using (IEnumerator<IFrame> en = collection!.GetEnumerator())
-            {
-                int i = 0;
-                InitIndexSupport(localFrames.Capacity);
-                SortedDictionary<SurveyType, List<int>> typeIndex = IndexByType;
-                while (en.MoveNext())
-                {
-                    IFrame frame = en.Current;
-                    localFrames.Add(frame); // TODO: detect millisecond error!
-                    typeIndex[frame.SurveyType].Add(i++);
-                }
-
-            }
-
-            return localFrames;
-        }
-
-        public int Count => Frames.Count; // Can't be read-only hence the Frames could be initialized.
-
-        public IFrame this[int index] => Frames[index]; // Can't be read-only hence the Frames could be initialized.
-
+        private List<nuint> Frames { get; }
         #endregion Frame support
 
         #region Augmented Coordinates
         private List<GeoPoint> augmentedCoordinates;
+        private bool disposedValue;
+
         public List<GeoPoint> AugmentedCoordinates => augmentedCoordinates ??= CreateNewCoordinateList();
         private List<GeoPoint> CreateNewCoordinateList()
         {
@@ -70,41 +31,77 @@ namespace SL3Reader
         }
         #endregion Augmented Coordinates
 
-        #region Indices
-        public SortedDictionary<SurveyType, List<int>> IndexByType { get; private set; }
+        #region Memory Mapped File Tools
+        private readonly MemoryMappedFile memoryMappedFile;
+        private readonly MemoryMappedViewAccessor viewAccessor;
+        private readonly SafeMemoryMappedViewHandle viewHandle;
+        #endregion Memory Mapped File Tools
 
-        private void InitIndexSupport(int estimatedCount)
-        {
-            IndexByType = new()
-            {
-                { SurveyType.Primary, new(estimatedCount / 8) },
-                { SurveyType.Secondary, new(estimatedCount / 8) },
-                { SurveyType.DownScan, new(estimatedCount / 10) },
-                { SurveyType.LeftSidescan,new() },
-                { SurveyType. RightSidescan, new() },
-                { SurveyType.SideScan, new(estimatedCount / 10) },
-                { SurveyType.Unknown6, new() },
-                { SurveyType.Unknown7, new(estimatedCount / 4) },
-                { SurveyType.Unknown8, new(estimatedCount / 4) },
-                { SurveyType.ThreeDimensional, new(estimatedCount / 10) },
-                { SurveyType.DebugDigital, new() },
-                { SurveyType.DebugNoise, new() }
-            };
-        }
+        #region Indices
+        public SortedDictionary<SurveyType, List<nuint>> IndexByType { get; }
+
         #endregion Indices
         [SkipLocalsInit]
-        public unsafe SL3Reader(string path) :
-           base(path, FileMode.Open, FileAccess.Read,
-           FileShare.Read, 4096, FileOptions.RandomAccess)
+        public unsafe SL3Reader(string path)
         {
-            if (Length < (SLFileHeader.Size + Frame.MinimumInitSize))
+            byte* ptr = null;
+            long len = new FileInfo(path).Length;
+
+            if (len < (SLFileHeader.Size + Frame.MinimumInitSize))
                 throw new EndOfStreamException("The file is too short to be valid.");
 
-            SLFileHeader fileHeader = new();
-            ReadExactly(new(&fileHeader, SLFileHeader.Size));
+            memoryMappedFile = MemoryMappedFile.CreateFromFile(
+                File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.RandomAccess, 0L),
+                null, len, MemoryMappedFileAccess.Read, HandleInheritability.None, false);
+            viewAccessor = memoryMappedFile.CreateViewAccessor(0, len, MemoryMappedFileAccess.Read);
+            viewHandle = viewAccessor.SafeMemoryMappedViewHandle;
+            viewHandle.AcquirePointer(ref ptr);
 
-            if (!fileHeader.IsValidFormat(LogFileFormat.SL3))
-                throw new InvalidDataException("Unsupported file type. Expected type SL3.");
+            ((SLFileHeader*)ptr)->ThrowIfInvalidFormatDetected();
+            ptr += SLFileHeader.Size; // Advance for the first frame
+
+            // Init Frames
+            const long averageFrameSize = 2118L; // Empirically set value to avoid frequent resize of the underlying array.
+            int estimatedCount = (int)(len / averageFrameSize);
+            Frames = new(estimatedCount);
+
+            // Init index lists
+            List<nuint> Primary = new(estimatedCount / 8),
+                        Secondary = new(estimatedCount / 8),
+                        DownScan = new(estimatedCount / 10),
+                        LeftSidescan = new(),
+                        RightSidescan = new(),
+                        SideScan = new(estimatedCount / 10),
+                        Unknown6 = new(),
+                        Unknown7 = new(estimatedCount / 4),
+                        Unknown8 = new(estimatedCount / 4),
+                        ThreeDimensional = new(estimatedCount / 10),
+                        DebugDigital = new(),
+                        DebugNoise = new();
+
+            // Init time
+            Frame* currentFrame = (Frame*)ptr; // Transfer to static private constructor!
+            Frame.InitTimestampBase(currentFrame->HardwareTime);
+
+            // Load frames
+
+
+            // Populate major index
+            IndexByType = new()
+            {
+                { SurveyType.Primary, Primary },
+                { SurveyType.Secondary, Secondary },
+                { SurveyType.DownScan, DownScan },
+                { SurveyType.LeftSidescan, LeftSidescan },
+                { SurveyType. RightSidescan, RightSidescan },
+                { SurveyType.SideScan, SideScan },
+                { SurveyType.Unknown6, Unknown6 },
+                { SurveyType.Unknown7, Unknown7 },
+                { SurveyType.Unknown8, Unknown8 },
+                { SurveyType.ThreeDimensional, ThreeDimensional },
+                { SurveyType.DebugDigital, DebugDigital },
+                { SurveyType.DebugNoise, DebugNoise }
+            };
 
             AugmentTrajectory();
         }
@@ -501,71 +498,38 @@ namespace SL3Reader
             }
         }
 
-        #region Enumerator support
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private IEnumerator<IFrame> GetSL3Enumerator() =>
-            frames is null || frames.Count == 0 ? new SL3Reader.Enumerator(this) : frames.GetEnumerator();
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        IEnumerator<IFrame> IEnumerable<IFrame>.GetEnumerator() => GetSL3Enumerator();
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        IEnumerator IEnumerable.GetEnumerator() => GetSL3Enumerator();
-
-        public readonly struct Enumerator : IEnumerator<IFrame>, IEnumerator
+        #region Dispose Pattern
+        protected virtual void Dispose(bool disposing)
         {
-            private readonly SL3Reader source;
-            private readonly unsafe Frame* pCurrent;
-            private readonly long fileLength;
-            readonly unsafe IFrame IEnumerator<IFrame>.Current => *pCurrent;
-            readonly unsafe object IEnumerator.Current => *pCurrent;
-
-            [SkipLocalsInit]
-            public unsafe Enumerator(SL3Reader source)
+            if (!disposedValue)
             {
-                bool lockTaken = false;
+                if (disposing)
+                {
+                    viewHandle.ReleasePointer();
+                    viewHandle.Close();
+                    viewAccessor.Dispose();
+                    memoryMappedFile.Dispose();
+                }
 
-                Monitor.Enter(source, ref lockTaken);
-                if (!lockTaken) throw new IOException("Unable to lock stream for single access use.");
-
-                this.source = source;
-                fileLength = source.Length;
-
-                pCurrent = (Frame*)AlignedAlloc(Frame.ExtendedSize, 64);
-
-                // The state of the source is unknown, so we have to reset the stream.
-                Reset();
-                InitTimestamp();
-                Reset();
-            }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private unsafe readonly void InitTimestamp()
-            {
-                source.ReadExactly(new(pCurrent, Frame.MinimumInitSize)); // We won't have to read the whole
-                                                                          // frame: just till the end of pCurrent->HardwareTime.
-                Frame.InitTimestampBase(pCurrent->HardwareTime);
-            }
-
-            [SkipLocalsInit]
-            unsafe readonly bool IEnumerator.MoveNext()
-            {
-                Frame* currentFrame = pCurrent;
-                SL3Reader stream = source;
-
-                // We read always the extended size!
-                return stream.Read(new(currentFrame, Frame.ExtendedSize)) == Frame.ExtendedSize && // If false: unable to read. It could be due to EOF or IO error.
-                       stream.Seek(currentFrame->LengthOfFrame - Frame.ExtendedSize, SeekOrigin.Current) < fileLength; // If false: Avoid returning non-complete frame.
-            }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public readonly void Reset() => source.SeekExactly(SLFileHeader.Size);
-            unsafe void IDisposable.Dispose()
-            {
-                Monitor.Exit(source);
-                AlignedFree(pCurrent);
+                // TODO: free unmanaged resources (unmanaged objects) and override finalizer
+                // TODO: set large fields to null
+                disposedValue = true;
             }
         }
-        #endregion End: enumerator support
-    }
+
+        // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
+        // ~SL3Reader()
+        // {
+        //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        //     Dispose(disposing: false);
+        // }
+
+        void IDisposable.Dispose()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
+        }
+        #endregion Dispose Pattern
+    };
 }

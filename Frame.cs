@@ -1,90 +1,15 @@
-﻿using System.Diagnostics;
-using static System.Globalization.CultureInfo;
+﻿using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System;
 using System.Runtime.CompilerServices;
 using System.Globalization;
+using static System.Globalization.CultureInfo;
 
-namespace SL3Reader {
-    public interface IFrame {
-        #region Basic properties
-        uint PositionOfFirstByte { get; }
-        uint UnknownAt4 { get; }
-        ushort LengthOfFrame { get; }
-        ushort PreviousFrameLength { get; }
-        SurveyType SurveyType { get; }
-        short PackingAt14 { get; }
-        uint CampaignID { get; }
-        float MinRange { get; }
-        float MaxRange { get; }
-        float UnknownAt28 { get; }
-        float UnknownAt32 { get; }
-        float UnknownAt36 { get; }
-        uint HardwareTime { get; }
-        uint LengthOfEchoData { get; }
-        float WaterDepth { get; }
-        Frequency Frequency { get; }
-        float UnknownAt54 { get; }
-        float UnknownAt58 { get; }
-        ushort UnknownAt62 { get; }
-        float UnknownAt64 { get; }
-        float UnknownAt68 { get; }
-        float UnknownAt72 { get; }
-        float UnknownAt76 { get; }
-        float UnknownAt80 { get; }
-        float GNSSSpeed { get; }
-        float WaterTemperature { get; }
-        int X { get; }
-        int Y { get; }
-        float WaterSpeed { get; }
-        float GNSSHeading { get; }
-        float GNSSAltitude { get; }
-        float MagneticHeading { get; }
-        DataValidity Flags { get; }
-        ushort PackingAt118 { get; }
-        uint UnknownAt120 { get; }
-        uint Milliseconds { get; }
-        long DataOffset { get; } // Generated
-        #endregion Basic Properties
-
-        #region Type support
-        FrameType FrameType { get; }
-        #endregion Type support
-
-        #region Extended properties
-        uint LastPrimaryScanFrameOffset { get; }
-        uint LastSecondaryScanFrameOffset { get; }
-        uint LastDownScanFrameOffset { get; }
-        uint LastLeftSidescanFrameOffset { get; }
-        uint LastRightSidescanFrameOffset { get; }
-        uint LastSidescanFrameOffset { get; }
-        uint UnknownAt152 { get; }
-        uint UnknownAt156 { get; }
-        uint UnknownAt160 { get; }
-        uint Last3DFrameOffset { get; }
-        #endregion Extended properties
-
-        #region DateTime support
-        DateTime Timestamp { get; }
-        #endregion DateTime support
-
-        #region WGS84
-        double Longitude { get; }
-        double Latitude { get; }
-        #endregion WGS84
-
-        #region Search support
-        //bool GetNearest3DFrame(List<IFrame> candidates, out IFrame? frame3D);
-        #endregion Search support
-
-        #region Unpack support
-        (double x, double y, double z, double v, double t, double d) QueryMetric();
-        #endregion Unpack support
-    }
-
+namespace SL3Reader
+{
     [StructLayout(LayoutKind.Explicit, Size = ExtendedSize)]
     [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
-    public readonly struct Frame : IFrame
+    public readonly struct Frame
     {
         public const int ExtendedSize = 168;
         public const int BasicSize = 128;
@@ -154,7 +79,8 @@ namespace SL3Reader {
 
         #region Type support
         // Derived:
-        public readonly FrameType FrameType {
+        public readonly FrameType FrameType
+        {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => SurveyType is SurveyType.Unknown7 or SurveyType.Unknown8 ? FrameType.Basic : FrameType.Extended;
         }
@@ -204,7 +130,8 @@ namespace SL3Reader {
         #endregion WGS84
 
         #region String generation
-        public readonly override string ToString() {
+        public readonly override string ToString()
+        {
             CultureInfo invariantCulture = Frame.invariantCulture;
             return string.Join(FieldSeparator, new string[17]
         {
@@ -227,7 +154,8 @@ namespace SL3Reader {
             Milliseconds.ToString()});
         }
 
-        private readonly string GetDebuggerDisplay() {
+        private readonly string GetDebuggerDisplay()
+        {
             CultureInfo invariantCulture = Frame.invariantCulture;
             return string.Join(DebugFieldSeparator, new string[5]
             {
@@ -248,5 +176,9 @@ namespace SL3Reader {
                     MillisecondsToSeconds * Milliseconds,
                     Math.Tau - GNSSHeading + HalfPI);
         #endregion Unpack support
-    }
+
+        #region Navigation
+
+        #endregion End Navigation
+    };
 }
