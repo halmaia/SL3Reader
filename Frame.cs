@@ -24,9 +24,9 @@ namespace SL3Reader {
         uint LengthOfEchoData { get; }
         float WaterDepth { get; }
         Frequency Frequency { get; }
-        ushort PackingAt54 { get; }
-        float UnknownAt56 { get; }
-        float UnknownAt60 { get; }
+        float UnknownAt54 { get; }
+        float UnknownAt58 { get; }
+        ushort UnknownAt62 { get; }
         float UnknownAt64 { get; }
         float UnknownAt68 { get; }
         float UnknownAt72 { get; }
@@ -84,7 +84,8 @@ namespace SL3Reader {
 
     [StructLayout(LayoutKind.Explicit, Size = ExtendedSize)]
     [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
-    public readonly struct Frame : IFrame {
+    public readonly struct Frame : IFrame
+    {
         public const int ExtendedSize = 168;
         public const int BasicSize = 128;
         public const int MinimumInitSize = 44;
@@ -121,14 +122,14 @@ namespace SL3Reader {
         [field: FieldOffset(44)] public readonly uint LengthOfEchoData { get; } // (44)
         [field: FieldOffset(48)] public readonly float WaterDepth { get; } // (48)
         [field: FieldOffset(52)] public readonly Frequency Frequency { get; } // (52)
-        [field: FieldOffset(54)] public readonly ushort PackingAt54 { get; } // (54)
-        [field: FieldOffset(56)] public readonly float UnknownAt56 { get; } // (56)
-        [field: FieldOffset(60)] public readonly float UnknownAt60 { get; } // (60)
-        [field: FieldOffset(64)] public readonly float UnknownAt64 { get; } // (64)
-        [field: FieldOffset(68)] public readonly float UnknownAt68 { get; } // (68)
-        [field: FieldOffset(72)] public readonly float UnknownAt72 { get; } // (72)
-        [field: FieldOffset(76)] public readonly float UnknownAt76 { get; } // (76)
-        [field: FieldOffset(80)] public readonly float UnknownAt80 { get; } // (80)
+        [field: FieldOffset(54)] public readonly float UnknownAt54 { get; } // (54)
+        [field: FieldOffset(58)] public readonly float UnknownAt58 { get; } // (58)
+        [field: FieldOffset(62)] public readonly ushort UnknownAt62 { get; } // (62)
+        [field: FieldOffset(64)] public readonly float UnknownAt64 { get; } // (64) // Fix: -1
+        [field: FieldOffset(68)] public readonly float UnknownAt68 { get; } // (68) // Fix: -1
+        [field: FieldOffset(72)] public readonly float UnknownAt72 { get; } // (72) // Fix: -1
+        [field: FieldOffset(76)] public readonly float UnknownAt76 { get; } // (76) // Fix: -1
+        [field: FieldOffset(80)] public readonly float UnknownAt80 { get; } // (80) // Fix: 0
         [field: FieldOffset(84)] public readonly float GNSSSpeed { get; } // (84)
         [field: FieldOffset(88)] public readonly float WaterTemperature { get; }  // (88)
         [field: FieldOffset(92)] public readonly int X { get; } // (92)

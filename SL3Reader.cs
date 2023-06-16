@@ -10,7 +10,6 @@ using Microsoft.Win32.SafeHandles;
 using System.Globalization;
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace SL3Reader
 {
@@ -458,6 +457,15 @@ namespace SL3Reader
             for (int i = 1; i < frameCount; i++)
             {
                 IFrame frame = frames[i];
+
+                unsafe
+                {
+                    var fr = (Frame)frame;
+                    var pos = fr.PositionOfFirstByte;
+                    byte* ptr = (byte*)&fr;
+                    int T = *(int*)&ptr[54];
+                }
+
                 (double x1, double y1, double z1, double v1, double t1, double d1) =
                     frame.QueryMetric();
 
