@@ -8,6 +8,7 @@ using System.Globalization;
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.MemoryMappedFiles;
+using System.Collections.ObjectModel;
 
 namespace SL3Reader
 {
@@ -15,31 +16,18 @@ namespace SL3Reader
     [DebuggerDisplay("{Name}")]
     public class SL3Reader : IDisposable
     {
-        #region Frame support
-        public List<nuint> Frames { get; }
-        #endregion Frame support
-        // TODO: Integrate into the constructor:
-        #region Augmented Coordinates
-        private List<GeoPoint> augmentedCoordinates;
+        #region Public properties
+        public ReadOnlyCollection<nuint> Frames { get; }
+        public ReadOnlyCollection<GeoPoint> AugmentedCoordinates { get; }
+        public ReadOnlyDictionary<SurveyType, ReadOnlyCollection<nuint>> IndexByType { get; }
+        #endregion End Public properties
 
-        public List<GeoPoint> AugmentedCoordinates => augmentedCoordinates ??= CreateNewCoordinateList();
-        private List<GeoPoint> CreateNewCoordinateList()
-        {
-            const long averageFrameSize = 2118L; // Empirically set value to avoid frequent resize of the underlying array.
-            return new((int)(Length / averageFrameSize));
-        }
-        #endregion Augmented Coordinates
-
-        #region Memory Mapped File Tools
+        #region Private variables
         private readonly MemoryMappedFile memoryMappedFile;
         private readonly MemoryMappedViewAccessor viewAccessor;
         private readonly SafeMemoryMappedViewHandle viewHandle;
-        #endregion Memory Mapped File Tools
+        #endregion End Private variables
 
-        #region Indices
-        public SortedDictionary<SurveyType, List<nuint>> IndexByType { get; }
-
-        #endregion Indices
         [SkipLocalsInit]
         public unsafe SL3Reader(string path)
         {
@@ -62,21 +50,21 @@ namespace SL3Reader
             // Init Frames
             const long averageFrameSize = 2118L; // Empirically set value to avoid frequent resize of the underlying array.
             int estimatedCount = (int)(len / averageFrameSize);
-            Frames = new(estimatedCount);
+            ReadOnlyCollectionBuilder<nuint> frames = new(estimatedCount);
 
             // Init index lists
-            List<nuint> Primary = new(estimatedCount / 8),
-                        Secondary = new(estimatedCount / 8),
-                        DownScan = new(estimatedCount / 10),
-                        LeftSidescan = new(),
-                        RightSidescan = new(),
-                        SideScan = new(estimatedCount / 10),
-                        Unknown6 = new(),
-                        Unknown7 = new(estimatedCount / 4),
-                        Unknown8 = new(estimatedCount / 4),
-                        ThreeDimensional = new(estimatedCount / 10),
-                        DebugDigital = new(),
-                        DebugNoise = new();
+            ReadOnlyCollectionBuilder<nuint> Primary = new(estimatedCount / 8),
+                                             Secondary = new(estimatedCount / 8),
+                                             DownScan = new(estimatedCount / 10),
+                                             LeftSidescan = new(),
+                                             RightSidescan = new(),
+                                             SideScan = new(estimatedCount / 10),
+                                             Unknown6 = new(),
+                                             Unknown7 = new(estimatedCount / 4),
+                                             Unknown8 = new(estimatedCount / 4),
+                                             ThreeDimensional = new(estimatedCount / 10),
+                                             DebugDigital = new(),
+                                             DebugNoise = new();
 
             // Init time
             Frame* currentFrame = (Frame*)ptr; // Transfer to static private constructor!
@@ -85,22 +73,24 @@ namespace SL3Reader
             // Load frames
 
 
+            Frames = frames.ToReadOnlyCollection();
+
             // Populate major index
-            IndexByType = new()
+            IndexByType = new SortedDictionary<SurveyType, ReadOnlyCollection<nuint>>()
             {
-                { SurveyType.Primary, Primary },
-                { SurveyType.Secondary, Secondary },
-                { SurveyType.DownScan, DownScan },
-                { SurveyType.LeftSidescan, LeftSidescan },
-                { SurveyType. RightSidescan, RightSidescan },
-                { SurveyType.SideScan, SideScan },
-                { SurveyType.Unknown6, Unknown6 },
-                { SurveyType.Unknown7, Unknown7 },
-                { SurveyType.Unknown8, Unknown8 },
-                { SurveyType.ThreeDimensional, ThreeDimensional },
-                { SurveyType.DebugDigital, DebugDigital },
-                { SurveyType.DebugNoise, DebugNoise }
-            };
+                { SurveyType.Primary, Primary.ToReadOnlyCollection() },
+                { SurveyType.Secondary, Secondary.ToReadOnlyCollection() },
+                { SurveyType.DownScan, DownScan.ToReadOnlyCollection() },
+                { SurveyType.LeftSidescan, LeftSidescan.ToReadOnlyCollection() },
+                { SurveyType. RightSidescan, RightSidescan.ToReadOnlyCollection() },
+                { SurveyType.SideScan, SideScan.ToReadOnlyCollection() },
+                { SurveyType.Unknown6, Unknown6.ToReadOnlyCollection() },
+                { SurveyType.Unknown7, Unknown7.ToReadOnlyCollection() },
+                { SurveyType.Unknown8, Unknown8.ToReadOnlyCollection() },
+                { SurveyType.ThreeDimensional, ThreeDimensional.ToReadOnlyCollection() },
+                { SurveyType.DebugDigital, DebugDigital.ToReadOnlyCollection() },
+                { SurveyType.DebugNoise, DebugNoise.ToReadOnlyCollection() }
+            }.AsReadOnly();
 
             AugmentTrajectory();
         }
@@ -164,7 +154,7 @@ namespace SL3Reader
             return breakpoints;
         }
 
-        public void ExportImagery(string path, SurveyType surveyType = SurveyType.SideScan)
+        public unsafe void ExportImagery(string path, SurveyType surveyType = SurveyType.SideScan)
         {
             ArgumentNullException.ThrowIfNull(nameof(path));
 
@@ -172,13 +162,10 @@ namespace SL3Reader
                 Directory.Delete(path!, true);
             path = Directory.CreateDirectory(path!).FullName;
 
-            IReadOnlyList<IFrame> frames = Frames; // Initialize the frames.
-            int frameCount = frames.Count;
-            if (frameCount < 1) return;
-
-            List<int> imageFrames = IndexByType[surveyType];
-            if (imageFrames.Count < 1) return; // Return when no sidescan exists
-            int numberOfColumns = (int)frames[imageFrames[0]].LengthOfEchoData;
+            ReadOnlyCollection<nuint> imageFrames = IndexByType[surveyType];
+            if (imageFrames.Count < 1) return; // Return when no imagery exists.
+            
+            uint numberOfColumns = ((Frame*)imageFrames[0])->LengthOfEchoData;
             string prefix = GetPrefix(surveyType);
 
             List<int> breakpoints = GetBreakPoints(imageFrames, out int maxHeight);
