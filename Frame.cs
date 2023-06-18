@@ -4,6 +4,10 @@ using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using System.Globalization;
 using static System.Globalization.CultureInfo;
+using System.Buffers.Text;
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
+using System.Buffers;
 
 namespace SL3Reader
 {
@@ -142,16 +146,72 @@ namespace SL3Reader
             Longitude.ToString("0.#######", invariantCulture),
             Latitude.ToString("0.#######", invariantCulture),
             GNSSAltitude.ToString("0.###", invariantCulture),
-            GNSSHeading.ToString(invariantCulture),
+            GNSSHeading.ToString("0.###", invariantCulture),
             GNSSSpeed.ToString("0.####", invariantCulture),
-            MagneticHeading.ToString(invariantCulture),
+            MagneticHeading.ToString("0.###",invariantCulture),
             MinRange.ToString("0.###", invariantCulture),
             MaxRange.ToString("0.###", invariantCulture),
             WaterTemperature.ToString("0.#",invariantCulture),
-            WaterSpeed.ToString("0.####", invariantCulture),
+            WaterSpeed.ToString("0.###", invariantCulture),
             HardwareTime.ToString(),
             Frequency.ToString(),
             Milliseconds.ToString()});
+        }
+
+        public readonly Span<char> TryFormat(Span<char> buffer)
+        {
+            var invar = invariantCulture;
+            CampaignID.TryFormat(buffer, out int pos, provider: invar);
+            buffer[pos++] = ',';
+            Timestamp.TryFormat(buffer[pos..], out int charWritten, DateTimeFormat, invar);
+            pos += charWritten;
+            buffer[pos++] = ',';
+            Enum.TryFormat(SurveyType, buffer[pos..], out charWritten);
+            pos += charWritten;
+            buffer[pos++] = ',';
+            WaterDepth.TryFormat(buffer[pos..], out charWritten, "0.###", provider: invar);
+            pos += charWritten;
+            buffer[pos++] = ',';
+            Longitude.TryFormat(buffer[pos..], out charWritten, "0.000000", invar);
+            pos += charWritten;
+            buffer[pos++] = ',';
+            Latitude.TryFormat(buffer[pos..], out charWritten, "0.0000000", invar);
+            pos += charWritten;
+            buffer[pos++] = ',';
+            GNSSAltitude.TryFormat(buffer[pos..], out charWritten, "0.###", invar);
+            pos += charWritten;
+            buffer[pos++] = ',';
+            GNSSHeading.TryFormat(buffer[pos..], out charWritten, "0.###", invar);
+            pos += charWritten;
+            buffer[pos++] = ',';
+            GNSSSpeed.TryFormat(buffer[pos..], out charWritten, "0.###", invar);
+            pos += charWritten;
+            buffer[pos++] = ',';
+            MagneticHeading.TryFormat(buffer[pos..], out charWritten, "0.###", invar);
+            pos += charWritten;
+            buffer[pos++] = ',';
+            MinRange.TryFormat(buffer[pos..], out charWritten, "0.###", invar);
+            pos += charWritten;
+            buffer[pos++] = ',';
+            MaxRange.TryFormat(buffer[pos..], out charWritten, "0.###", invar);
+            pos += charWritten;
+            buffer[pos++] = ',';
+            WaterTemperature.TryFormat(buffer[pos..], out charWritten, "0.#", invar);
+            pos += charWritten;
+            buffer[pos++] = ',';
+            WaterSpeed.TryFormat(buffer[pos..], out charWritten, "0.###", invar);
+            pos += charWritten;
+            buffer[pos++] = ',';
+            HardwareTime.TryFormat(buffer[pos..], out charWritten, provider: invar);
+            pos += charWritten;
+            buffer[pos++] = ',';
+            Enum.TryFormat(Frequency, buffer[pos..], out charWritten);
+            pos += charWritten;
+            buffer[pos++] = ',';
+            Milliseconds.TryFormat(buffer[pos..], out charWritten, provider: invar);
+            pos += charWritten;
+            buffer[pos++] = ',';
+            return buffer[..pos];
         }
 
         private readonly string GetDebuggerDisplay()

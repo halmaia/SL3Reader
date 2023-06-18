@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using static System.IO.Path;
 using static System.Console;
 using System.Runtime.CompilerServices;
@@ -10,7 +9,7 @@ namespace SL3Reader
     {
         public static void Main(string[] args)
         {
-            if (args!.Length != 3) // Always non-null.
+            if (args!.Length is not 3) // Always non-null.
             {
                 PrintUsage();
                 return;
@@ -24,7 +23,7 @@ namespace SL3Reader
                 return;
             }
 
-            string output = GetFullPath(args[1]);
+            string output = GetFullPath(args![1]);
             if (!Exists(GetDirectoryName(output)))
             {
                 WriteLine("Directory not found for the output file!");
@@ -34,7 +33,7 @@ namespace SL3Reader
 
             using SL3Reader sl3reader = new(input);
 
-            string expSelector = args[2].Trim().ToLowerInvariant();
+            string expSelector = args![2].Trim().ToLowerInvariant();
             switch (expSelector)
             {
                 case "-3dm":
@@ -114,10 +113,10 @@ namespace SL3Reader
             [SkipLocalsInit]
             void PrintSummary()
             {
-                SortedDictionary<SurveyType, List<int>> indexByType = sl3reader.IndexByType;
-
                 WriteLine("File statistics:");
                 WriteLine("\tNumber of frames: " + sl3reader.Frames.Count.ToString("# ##0"));
+                
+                System.Collections.ObjectModel.ReadOnlyDictionary<SurveyType, System.Collections.ObjectModel.ReadOnlyCollection<nuint>> indexByType = sl3reader.IndexByType;
                 WriteLine("\tNumber of primary frames: " + indexByType[SurveyType.Primary].Count.ToString("# ##0"));
                 WriteLine("\tNumber of secondary frames: " + indexByType[SurveyType.Secondary].Count.ToString("# ##0"));
                 WriteLine("\tNumber of left sidescan frames: " + indexByType[SurveyType.LeftSidescan].Count.ToString("# ##0"));

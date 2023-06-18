@@ -295,7 +295,7 @@ namespace SL3Reader
             out Span<byte> pixelData)
         {
             fullStride = width; //width + (4 - (width % 4));
-            fixed (byte* pBuffer = &buffer[0]) // Just formal: buffer is pre-pinned by the GC.
+            fixed (byte* pBuffer = buffer) // Just formal: buffer is pre-pinned by the GC.
             {
                 BitmapFileHeader* pFileHeader = (BitmapFileHeader*)pBuffer;
                 int fileSize = (int)pFileHeader->Update(width, height);

@@ -26,12 +26,12 @@ namespace SL3Reader
         private readonly MemoryMappedFile memoryMappedFile;
         private readonly MemoryMappedViewAccessor viewAccessor;
         private readonly SafeMemoryMappedViewHandle viewHandle;
+        private readonly ReadOnlyCollection<int> Coordinate3DHelper;
         #endregion End Private variables
 
         [SkipLocalsInit]
         public unsafe SL3Reader(string path)
         {
-            byte* ptr = null;
             long len = new FileInfo(path).Length;
 
             if (len < (SLFileHeader.Size + Frame.MinimumInitSize))
@@ -42,9 +42,12 @@ namespace SL3Reader
                 null, len, MemoryMappedFileAccess.Read, HandleInheritability.None, false);
             viewAccessor = memoryMappedFile.CreateViewAccessor(0, len, MemoryMappedFileAccess.Read);
             viewHandle = viewAccessor.SafeMemoryMappedViewHandle;
+            byte* ptr = null;
             viewHandle.AcquirePointer(ref ptr);
 
             ((SLFileHeader*)ptr)->ThrowIfInvalidFormatDetected();
+            byte* maxPtr = ptr + len;
+
             ptr += SLFileHeader.Size; // Advance for the first frame
 
             // Init Frames
@@ -66,12 +69,66 @@ namespace SL3Reader
                                              DebugDigital = new(),
                                              DebugNoise = new();
 
+            ReadOnlyCollectionBuilder<int> coordinate3DHelper = new(estimatedCount / 10);
+            ReadOnlyCollectionBuilder<int> coordinateSidescanHelper = new(estimatedCount / 10);
+
             // Init time
-            Frame* currentFrame = (Frame*)ptr; // Transfer to static private constructor!
+            Frame* currentFrame = (Frame*)ptr;
             Frame.InitTimestampBase(currentFrame->HardwareTime);
 
             // Load frames
+            for (int i = 0; ptr < maxPtr; ptr += currentFrame->LengthOfFrame, i++)
+            {
+                currentFrame = (Frame*)ptr;
+                nuint current = (nuint)currentFrame;
+                frames.Add(current);
+                switch (currentFrame->SurveyType)
+                {
+                    case SurveyType.Primary:
+                        Primary.Add(current);
+                        break;
+                    case SurveyType.Secondary:
+                        Secondary.Add(current);
+                        break;
+                    case SurveyType.DownScan:
+                        DownScan.Add(current);
+                        break;
+                    case SurveyType.LeftSidescan:
+                        LeftSidescan.Add(current);
+                        break;
+                    case SurveyType.RightSidescan:
+                        RightSidescan.Add(current);
+                        break;
+                    case SurveyType.SideScan:
+                        SideScan.Add(current);
+                        break;
+                    case SurveyType.Unknown6:
+                        Unknown6.Add(current);
+                        break;
+                    case SurveyType.Unknown7:
+                        Unknown7.Add(current);
+                        break;
+                    case SurveyType.Unknown8:
+                        Unknown8.Add(current);
+                        break;
+                    case SurveyType.ThreeDimensional:
+                        ThreeDimensional.Add(current);
+                        coordinate3DHelper.Add(i);
+                        break;
+                    case SurveyType.DebugDigital:
+                        DebugDigital.Add(current);
+                        break;
+                    case SurveyType.DebugNoise:
+                        DebugNoise.Add(current);
+                        break;
+                }
+            }
 
+            // TODO: check premature end.
+
+            // Init AugmentedCoordinates
+            AugmentedCoordinates = frames.Count is 0 ? new ReadOnlyCollectionBuilder<GeoPoint>().ToReadOnlyCollection() :
+                            AugmentTrajectory(frames);
 
             Frames = frames.ToReadOnlyCollection();
 
@@ -92,66 +149,104 @@ namespace SL3Reader
                 { SurveyType.DebugNoise, DebugNoise.ToReadOnlyCollection() }
             }.AsReadOnly();
 
-            AugmentTrajectory();
-        }
+            Coordinate3DHelper = coordinate3DHelper.ToReadOnlyCollection();
 
-        public void ExportToCSV(string path, [ConstantExpected] SurveyType filter = SurveyType.All)
-        {
-            File.WriteAllLines(path,
-                EnumerateFrames(Frames, AugmentedCoordinates, filter is SurveyType.All ? null : IndexByType[filter]));
+            return;
 
-            static IEnumerable<string> EnumerateFrames(
-                                                        IReadOnlyList<IFrame> frames,
-                                                        List<GeoPoint> augmentedCoordinates,
-                                                        IReadOnlyList<int>? typeList = null)
+            // Local fuctions:
+
+            static ReadOnlyCollection<GeoPoint> AugmentTrajectory(ReadOnlyCollectionBuilder<nuint> frames)
             {
+                const double lim = 1.2d;
+                const double C = 1.4326d; // Empirical, around √2.
 
-                yield return "CampaignID[#],DateTime[UTC],SurveyType,WaterDepth[Feet],Longitude[°WGS48],Latitude[°WGS84],GNSSAltitude[Feet_WGS84Ellipsoid],GNSSHeading[rad_azimuth],GNSSSpeed[m/s],MagneticHeading[rad_azimuth],MinRange[Feet],MaxRange[Feet],WaterTemperature[°C],WaterSpeed[Feet],HardwareTime[ms],Frequency,Milliseconds[ms],AugmentedX[m],AugmentedY[m]";
+                ReadOnlyCollectionBuilder<GeoPoint> coordinates = new(frames.Count);
 
-                if (typeList is null)
-                    for (int i = 0, count = frames.Count; i < count; i++)
-                        yield return frames[i].ToString() + ',' + augmentedCoordinates[i];
+                (double x0, double y0, double z0, double v0, double t0, double d0) = ((Frame*)frames[0])->QueryMetric();
+                coordinates.Add(new(x0, y0, d0, z0, 0)); // The first one.
+                double distance = 0, xprev = x0, yprev = y0;
 
-                else
-                    for (int i = 0, count = typeList.Count, j = count != 0 ? typeList![0] : 0; i < count; i++, j = typeList![i])
-                        yield return frames[j].ToString() + ',' + augmentedCoordinates[j];
-            }
-        }
-
-        private List<int> GetBreakPoints(List<int> framesToCheck, out int contiguousLength)
-        {
-            int i = 0;
-            IReadOnlyList<IFrame> frames = Frames;
-            int frameCount = framesToCheck.Count;
-            float previousRange = frames[framesToCheck[i]].MaxRange;
-            List<int> breakpoints = new(frameCount / 300) { i }; // ~300 empirical guess.
-
-            for (; i < frameCount; i++)
-            {
-                float currentRange = frames[framesToCheck[i]].MaxRange;
-                if (currentRange != previousRange)
+                for (int i = 1, frameCount = frames.Count; i != frameCount;)
                 {
-                    previousRange = currentRange;
-                    breakpoints.Add(i);
+                    Frame* frame = (Frame*)frames[i++];
+
+
+                    (double x1, double y1, double z1, double v1, double t1, double d1) =
+                        frame->QueryMetric();
+
+                    (double sin0, double cos0) = double.SinCos(d0);
+                    (double sin1, double cos1) = double.SinCos(d1);
+
+                    double vx0 = cos0 * v0,
+                           vy0 = sin0 * v0,
+                           vx1 = cos1 * v1,
+                           vy1 = sin1 * v1,
+                           dt = t1 - t0;
+
+                    x0 += C * .5d * (vx0 + vx1) * dt;
+                    y0 += C * .5d * (vy0 + vy1) * dt;
+
+                    d0 = d1; t0 = t1; v0 = v1;
+
+                    if (frame->SurveyType is SurveyType.Primary or SurveyType.Secondary or
+                        SurveyType.Unknown7 or SurveyType.Unknown8)
+                    {
+                        double dy = y0 - y1;
+                        if (double.Abs(dy) > lim)
+                            y0 = y1 + double.CopySign(lim, dy);
+
+                        double dx = x0 - x1;
+                        if (double.Abs(dx) > lim)
+                            x0 = x1 + double.CopySign(lim, dx);
+                    }
+                    else
+                    {
+                        double dy = y0 - y1;
+                        if (double.Abs(dy) > 50) // Detect seriuos errors
+                            y0 = frame->Y;
+
+                        double dx = x0 - x1;
+                        if (double.Abs(dx) > 50)
+                            x0 = frame->X;
+                    }
+
+                    coordinates.Add(new(x0, y0, d0, z1, distance += double.Hypot(x0 - xprev, y0 - yprev)));
+                    xprev = x0; yprev = y0;
                 }
+                return coordinates.ToReadOnlyCollection();
             }
+        }
 
-            if (breakpoints[^1] != --i)
-                breakpoints.Add(i); // There was no change in the range, so we have to add the last one.
+        public unsafe void ExportToCSV(string path)
+        {
+            ReadOnlyCollection<nuint> frames = Frames;
+            int count = frames.Count;
+            using var textWriter = new StreamWriter(path,
+                new FileStreamOptions()
+                {
+                    Access = FileAccess.Write,
+                    Mode = FileMode.Create,
+                    Share = FileShare.Read,
+                    Options = FileOptions.SequentialScan,
+                    PreallocationSize = 151 * count, // Empirical guess.
+                    BufferSize = 151 * count
+                });
 
-            contiguousLength = 0;
+            textWriter.BaseStream.Write("CampaignID[#],DateTime[UTC],SurveyType,WaterDepth[Feet],Longitude[°WGS48],Latitude[°WGS84],GNSSAltitude[Feet_WGS84Ellipsoid],GNSSHeading[rad_azimuth],GNSSSpeed[m/s],MagneticHeading[rad_azimuth],MinRange[Feet],MaxRange[Feet],WaterTemperature[°C],WaterSpeed[Feet],HardwareTime[ms],Frequency,Milliseconds[ms],AugmentedX[m],AugmentedY[m]"u8);
 
-            for (int j = 0,
-                 maxIndex = breakpoints.Count - 1,
-                 delta;
-                 j < maxIndex;
-                 j++)
+            // TODO: Filter is not working!
+            //ReadOnlyCollection<nuint> frames = filter is SurveyType.All ? Frames : IndexByType[filter];
+
+            ReadOnlyCollection<GeoPoint> augmentedCoordinates = AugmentedCoordinates;
+
+            scoped Span<char> buffer = stackalloc char[256];
+            for (int i = 0; i != count; i++)
             {
-                if (contiguousLength < (delta = breakpoints[1 + j] - breakpoints[j]))
-                    contiguousLength = delta;
+                textWriter.Write(((Frame*)frames[i])->TryFormat(buffer));
+                textWriter.WriteLine(augmentedCoordinates[i].TryFormat(buffer));
             }
+            textWriter.Close();
 
-            return breakpoints;
         }
 
         public unsafe void ExportImagery(string path, SurveyType surveyType = SurveyType.SideScan)
@@ -164,12 +259,11 @@ namespace SL3Reader
 
             ReadOnlyCollection<nuint> imageFrames = IndexByType[surveyType];
             if (imageFrames.Count < 1) return; // Return when no imagery exists.
-            
-            uint numberOfColumns = ((Frame*)imageFrames[0])->LengthOfEchoData;
-            string prefix = GetPrefix(surveyType);
+
+            CultureInfo InvariantCulture = CultureInfo.InvariantCulture;
 
             List<int> breakpoints = GetBreakPoints(imageFrames, out int maxHeight);
-
+            int numberOfColumns = (int)((Frame*)imageFrames[0])->LengthOfEchoData;
             byte[] buffer = BitmapHelper.CreateBuffer(maxHeight, numberOfColumns);
 
             for (int i = 0, maxIndex = breakpoints.Count - 1; i < maxIndex; i++)
@@ -181,26 +275,27 @@ namespace SL3Reader
                     out Span<byte> fileBuffer,
                     out Span<byte> pixelData);
 
-                for (int j = first, k = 0; j < final; j++)
-                {
-                    long dataOffset = frames[imageFrames[j]].DataOffset;
-                    SeekExactly(dataOffset);
+                byte* offset = ((Frame*)imageFrames[0])->FrameType is FrameType.Basic ? (byte*)Frame.BasicSize : (byte*)Frame.ExtendedSize;
 
-                    ReadExactly(pixelData.Slice(fullStride * k++, numberOfColumns));
-                }
+                fixed (byte* pixelPtr = pixelData)
+                    for (int j = first, k = 0; j < final; j++)
+                        Buffer.MemoryCopy(imageFrames[j] + offset, pixelPtr + (fullStride * k++), numberOfColumns, numberOfColumns);
 
+                string prefix = GetPrefix(surveyType);
                 using SafeFileHandle handle = File.OpenHandle(Path.Combine(path, prefix + final + ".bmp"),
                     FileMode.CreateNew, FileAccess.Write, FileShare.None, FileOptions.SequentialScan);
                 RandomAccess.Write(handle, fileBuffer, 0);
+                handle.Close();
 
                 // World file
-                CultureInfo InvariantCulture = CultureInfo.InvariantCulture;
-                var firstStrip = AugmentedCoordinates[imageFrames[first]];
-                var lastStrip = AugmentedCoordinates[imageFrames[final - 1]];
-                var lastFrame = frames[imageFrames[final - 1]];
+
+                // TODO: Remove intermediate solution:
+                var firstStrip = AugmentedCoordinates[Frames.IndexOf(imageFrames[first])];
+                var lastStrip = AugmentedCoordinates[Frames.IndexOf(imageFrames[final - 1])];
+                var lastFrame = (Frame*)imageFrames[final - 1];
 
                 double XSize = -(lastStrip.Distance - firstStrip.Distance) / (final - first - 1);
-                double YSize = -10 * lastFrame.MaxRange * .3048 / numberOfColumns;
+                double YSize = -10 * lastFrame->MaxRange * .3048 / numberOfColumns;
                 string WorldString = string.Join("\r\n",
                         new string[6]
                          {"0",
@@ -208,45 +303,74 @@ namespace SL3Reader
                          XSize.ToString(InvariantCulture),
                          "0",
                          lastStrip.Distance.ToString(InvariantCulture),
-                         lastFrame.SurveyType is SurveyType.SideScan ? (-1400*YSize).ToString(): "0"}, 0, 6);
+                         lastFrame->SurveyType is SurveyType.SideScan ? (-1400*YSize).ToString(): "0"}, 0, 6);
 
                 File.WriteAllText(Path.Combine(path, prefix + final + ".bpw"), WorldString);
                 // End world file
             }
-        }
 
+            [SkipLocalsInit, MethodImpl(MethodImplOptions.AggressiveInlining)]
+            static string GetPrefix(SurveyType surveyType) =>
+                surveyType switch
+                {
+                    SurveyType.SideScan => "SS_",
+                    SurveyType.DownScan => "DS_",
+                    SurveyType.Primary => "PS_",
+                    SurveyType.Secondary => "SES_",
+                    SurveyType.Unknown8 => "U8_",
+                    SurveyType.Unknown7 => "U7_",
+                    _ => "UNK_"
+                };
 
-        [SkipLocalsInit, MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static string GetPrefix(SurveyType surveyType) =>
-            surveyType switch
+            static unsafe List<int> GetBreakPoints(ReadOnlyCollection<nuint> framesToCheck, out int contiguousLength)
             {
-                SurveyType.SideScan => "SS_",
-                SurveyType.DownScan => "DS_",
-                SurveyType.Primary => "PS_",
-                SurveyType.Secondary => "SecS_",
-                SurveyType.Unknown8 => "U8_",
-                SurveyType.Unknown7 => "U7_",
-                _ => "UNKNOWN_"
-            };
+                int i = 0, frameCount = framesToCheck.Count;
+                float previousRange = ((Frame*)framesToCheck[i])->MaxRange;
+
+                List<int> breakpoints = new(frameCount / 300) { i++ }; // ~300 empirical guess. 
+                                                                       // 'i' have to be incremented to prevent double test.
+
+                for (; i < frameCount; i++)
+                {
+                    float currentRange = ((Frame*)framesToCheck[i])->MaxRange;
+                    if (currentRange != previousRange)
+                    {
+                        previousRange = currentRange;
+                        breakpoints.Add(i);
+                    }
+                }
+
+                if (breakpoints[^1] != --i)
+                    breakpoints.Add(i); // There was no change in the range, so we have to add the last one.
+
+                contiguousLength = 0;
+
+                for (int j = 0,
+                     maxIndex = breakpoints.Count - 1,
+                     delta;
+                     j < maxIndex;
+                     j++)
+                {
+                    if (contiguousLength < (delta = breakpoints[1 + j] - breakpoints[j]))
+                        contiguousLength = delta;
+                }
+                return breakpoints;
+            }
+        }
 
         public unsafe void ExamineUnknown8Datasets()
         {
-            var frames = Frames;
-            int frameCount = frames.Count; // Initialize the frames.
-            if (frameCount < 1) return;
-
-            List<int> unknown8Frames = IndexByType[SurveyType.Unknown8];
+            ReadOnlyCollection<nuint> unknown8Frames = IndexByType[SurveyType.Unknown8];
             int unknown8FrameCount = unknown8Frames.Count;
-            if (frameCount < 1) return; // Return when no U8 exists
+            if (unknown8FrameCount < 1) return; // Return when no U8 exists
 
-            var buffer = new byte[512];
-            fixed (byte* p = &buffer[0])
+            byte[] buffer = new byte[512];
+            fixed (byte* p = buffer)
             {
                 for (int i = 0; i < unknown8FrameCount - 1; i++)
                 {
-                    IFrame frame = frames[unknown8Frames[i]];
-                    SeekExactly(frame.DataOffset);
-                    Read(new(p, 512));
+                    nuint ptr = unknown8Frames[i];
+                    Buffer.MemoryCopy((byte*)(ptr + (nuint)((Frame*)ptr)->DataOffset), p, 512, 512);
                     for (int j = 0; j < 256; j += 2)
                     {
                         Debug.Print($"{buffer[j]}, {buffer[1 + j]}");
@@ -263,149 +387,136 @@ namespace SL3Reader
             const string doubleFormat = "0.####";
             CultureInfo invariantCulture = CultureInfo.InvariantCulture;
 
-
-            IReadOnlyList<IFrame> frames = Frames;
-            int frameCount = frames.Count; // Initialize the frames.
-            if (frameCount < 1) return;
-
-            List<int> frames3D = IndexByType[SurveyType.ThreeDimensional];
+            ReadOnlyCollection<nuint> frames3D = IndexByType[SurveyType.ThreeDimensional];
             int frames3DLength = frames3D.Count;
             if (frames3DLength < 1) return;
-            List<GeoPoint> augmentedCoordinates = AugmentedCoordinates;
+            ReadOnlyCollection<GeoPoint> augmentedCoordinates = AugmentedCoordinates;
+            var coordinate3DHelper = Coordinate3DHelper;
 
             using StreamWriter streamWriter = File.CreateText(path);
             streamWriter.WriteLine("CampaignID,DateTime,X[Lowrance_m],Y[Lowrance_m],Z[m_WGS84Ellipsoid],Depth[m],Angle[°],Distance[m],Reliability");
 
             string[] stringArray = GC.AllocateUninitializedArray<string>(9);
 
-            ThreeDimensionalFrameHeader header = new();
-            Span<byte> sHeader = new(&header, ThreeDimensionalFrameHeader.Size);
 
-            byte[] measurementsArray = ArrayPool<byte>.Shared.Rent(800 * InterferometricMeasurement.Size);
-            fixed (byte* reset = &measurementsArray[0])
+            for (int i = 0; i < frames3DLength; i++)
             {
-                for (int i = 0; i < frames3DLength; i++)
+                Frame* frame = (Frame*)frames3D[i];
+                ThreeDimensionalFrameHeader* header = (ThreeDimensionalFrameHeader*)(((byte*)frame) + Frame.ExtendedSize);
+
+                // TODO: Remove intermediate solution:
+                GeoPoint augmentedCoordinate = augmentedCoordinates[coordinate3DHelper[i]];
+                byte* measurements = (byte*)header + ThreeDimensionalFrameHeader.Size;
+
+                double centralX = augmentedCoordinate.X,
+                       centralY = augmentedCoordinate.Y,
+                       centralZ = .3048 * augmentedCoordinate.Altitude;
+
+                (double sin, double cos) =
+                    double.SinCos((magneticHeading ? frame->MagneticHeading : frame->GNSSHeading) - .5 * double.Pi);
+
+                stringArray[0] = frame->CampaignID.ToString();
+                stringArray[1] = frame->Timestamp.ToString("yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'", invariantCulture);
+                stringArray[8] = "R";
+
+                // *************************** THIS IS TERRIBLE ***************************
+                // *************************** Refactor    ASAP ***************************
+                // Left side
+                for (byte* limit = measurements + header->NumberOfLeftBytes;
+                    measurements < limit;
+                    measurements += InterferometricMeasurement.Size)
                 {
-                    int frame3DIndex = frames3D[i];
-                    IFrame frame = frames[frame3DIndex];
-                    GeoPoint augmentedCoordinate = augmentedCoordinates[frame3DIndex];
+                    InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
+                    double delta = measurement->Delta,
+                           depth = measurement->Depth;
+                    double distance = .3048 * double.Hypot(delta, depth);
+                    double angle = 90 - (360 / double.Tau) * double.Atan2(depth, delta);
 
-                    SeekExactly(frame.DataOffset);
-                    ReadExactly(sHeader);
-                    ReadExactly(new(reset, header.NumberOfUsedBytes));
-                    byte* measurements = reset;
+                    delta *= -.3048; // Negative side 
 
-                    double centralX = augmentedCoordinate.X,
-                           centralY = augmentedCoordinate.Y,
-                           centralZ = .3048 * augmentedCoordinate.Altitude;
+                    stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                    stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
+                    stringArray[4] = double.FusedMultiplyAdd(-.3048, depth, centralZ).ToString(doubleFormat, invariantCulture);
+                    stringArray[5] = (.3048 * depth).ToString(doubleFormat, invariantCulture);
+                    stringArray[6] = angle.ToString(doubleFormat, invariantCulture);
+                    stringArray[7] = distance.ToString(doubleFormat, invariantCulture);
 
-                    (double sin, double cos) =
-                        double.SinCos((magneticHeading ? frame.MagneticHeading : frame.GNSSHeading) - .5 * double.Pi);
+                    streamWriter.WriteLine(string.Join(',', stringArray));
+                }
 
-                    stringArray[0] = frame.CampaignID.ToString();
-                    stringArray[1] = frame.Timestamp.ToString("yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'", invariantCulture);
-                    stringArray[8] = "R";
+                // Right side
+                for (byte* limit = measurements + header->NumberOfRightBytes;
+                    measurements < limit;
+                    measurements += InterferometricMeasurement.Size)
+                {
+                    InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
+                    double delta = measurement->Delta,
+                           depth = measurement->Depth;
+                    double distance = .3048 * double.Hypot(delta, depth);
+                    double angle = 90 - (360 / double.Tau) * double.Atan2(depth, delta);
 
-                    // *************************** THIS IS TERRIBLE ***************************
-                    // *************************** Refactor    ASAP ***************************
-                    // Left side
-                    for (byte* limit = measurements + header.NumberOfLeftBytes;
+                    delta *= .3048; // Positive side 
+
+                    stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                    stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
+                    stringArray[4] = double.FusedMultiplyAdd(-.3048, depth, centralZ).ToString(doubleFormat, invariantCulture);
+                    stringArray[5] = (.3048 * depth).ToString(doubleFormat, invariantCulture);
+                    stringArray[6] = angle.ToString(doubleFormat, invariantCulture);
+                    stringArray[7] = distance.ToString(doubleFormat, invariantCulture);
+
+                    streamWriter.WriteLine(string.Join(',', stringArray));
+                }
+
+                if (includeUnreliable)
+                {
+                    stringArray[8] = "U";
+                    for (byte* limit = measurements + header->NumberOfUnreliableLeftBytes;
                         measurements < limit;
                         measurements += InterferometricMeasurement.Size)
                     {
                         InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
-                        double delta = measurement->Delta,
-                               depth = measurement->Depth;
-                        double distance = .3048 * double.Hypot(delta, depth);
-                        double angle = 90 - (360 / double.Tau) * double.Atan2(depth, delta);
-
-                        delta *= -.3048; // Negative side 
-
-                        stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
-                        stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
-                        stringArray[4] = double.FusedMultiplyAdd(-.3048, depth, centralZ).ToString(doubleFormat, invariantCulture);
-                        stringArray[5] = (.3048 * depth).ToString(doubleFormat, invariantCulture);
-                        stringArray[6] = angle.ToString(doubleFormat, invariantCulture);
-                        stringArray[7] = distance.ToString(doubleFormat, invariantCulture);
-
-                        streamWriter.WriteLine(string.Join(',', stringArray));
-                    }
-
-                    // Right side
-                    for (byte* limit = measurements + header.NumberOfRightBytes;
-                        measurements < limit;
-                        measurements += InterferometricMeasurement.Size)
-                    {
-                        InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
-                        double delta = measurement->Delta,
-                               depth = measurement->Depth;
-                        double distance = .3048 * double.Hypot(delta, depth);
-                        double angle = 90 - (360 / double.Tau) * double.Atan2(depth, delta);
-
-                        delta *= .3048; // Positive side 
-
-                        stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
-                        stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
-                        stringArray[4] = double.FusedMultiplyAdd(-.3048, depth, centralZ).ToString(doubleFormat, invariantCulture);
-                        stringArray[5] = (.3048 * depth).ToString(doubleFormat, invariantCulture);
-                        stringArray[6] = angle.ToString(doubleFormat, invariantCulture);
-                        stringArray[7] = distance.ToString(doubleFormat, invariantCulture);
-
-                        streamWriter.WriteLine(string.Join(',', stringArray));
-                    }
-
-                    if (includeUnreliable)
-                    {
-                        stringArray[8] = "U";
-                        for (byte* limit = measurements + header.NumberOfUnreliableLeftBytes;
-                            measurements < limit;
-                            measurements += InterferometricMeasurement.Size)
+                        if (IsValidMeasurement(measurement, out double delta, out double depth))
                         {
-                            InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
-                            if (IsValidMeasurement(measurement, out double delta, out double depth))
-                            {
-                                double distance = .3048 * double.Hypot(delta, depth);
-                                double angle = 90 - (360 / double.Tau) * double.Atan2(depth, delta);
+                            double distance = .3048 * double.Hypot(delta, depth);
+                            double angle = 90 - (360 / double.Tau) * double.Atan2(depth, delta);
 
-                                delta *= -.3048; // Negative side 
+                            delta *= -.3048; // Negative side 
 
-                                stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
-                                stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
-                                stringArray[4] = double.FusedMultiplyAdd(-.3048, depth, centralZ).ToString(doubleFormat, invariantCulture);
-                                stringArray[5] = (.3048 * depth).ToString(doubleFormat, invariantCulture);
-                                stringArray[6] = angle.ToString(doubleFormat, invariantCulture);
-                                stringArray[7] = distance.ToString(doubleFormat, invariantCulture);
+                            stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                            stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
+                            stringArray[4] = double.FusedMultiplyAdd(-.3048, depth, centralZ).ToString(doubleFormat, invariantCulture);
+                            stringArray[5] = (.3048 * depth).ToString(doubleFormat, invariantCulture);
+                            stringArray[6] = angle.ToString(doubleFormat, invariantCulture);
+                            stringArray[7] = distance.ToString(doubleFormat, invariantCulture);
 
-                                streamWriter.WriteLine(string.Join(',', stringArray));
-                            }
+                            streamWriter.WriteLine(string.Join(',', stringArray));
                         }
+                    }
 
-                        for (byte* limit = measurements + header.NumberOfUnreliableRightBytes;
-                            measurements < limit;
-                            measurements += InterferometricMeasurement.Size)
+                    for (byte* limit = measurements + header->NumberOfUnreliableRightBytes;
+                        measurements < limit;
+                        measurements += InterferometricMeasurement.Size)
+                    {
+                        InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
+                        if (IsValidMeasurement(measurement, out double delta, out double depth))
                         {
-                            InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
-                            if (IsValidMeasurement(measurement, out double delta, out double depth))
-                            {
-                                double distance = .3048 * double.Hypot(delta, depth);
-                                double angle = 90 - (360 / double.Tau) * double.Atan2(depth, delta);
+                            double distance = .3048 * double.Hypot(delta, depth);
+                            double angle = 90 - (360 / double.Tau) * double.Atan2(depth, delta);
 
-                                delta *= .3048; // Positive side 
+                            delta *= .3048; // Positive side 
 
-                                stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
-                                stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
-                                stringArray[4] = double.FusedMultiplyAdd(-.3048, depth, centralZ).ToString(doubleFormat, invariantCulture);
-                                stringArray[5] = (.3048 * depth).ToString(doubleFormat, invariantCulture);
-                                stringArray[6] = angle.ToString(doubleFormat, invariantCulture);
-                                stringArray[7] = distance.ToString(doubleFormat, invariantCulture);
+                            stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                            stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
+                            stringArray[4] = double.FusedMultiplyAdd(-.3048, depth, centralZ).ToString(doubleFormat, invariantCulture);
+                            stringArray[5] = (.3048 * depth).ToString(doubleFormat, invariantCulture);
+                            stringArray[6] = angle.ToString(doubleFormat, invariantCulture);
+                            stringArray[7] = distance.ToString(doubleFormat, invariantCulture);
 
-                                streamWriter.WriteLine(string.Join(',', stringArray));
-                            }
+                            streamWriter.WriteLine(string.Join(',', stringArray));
                         }
                     }
                 }
             }
-            ArrayPool<byte>.Shared.Return(measurementsArray);
 
             [SkipLocalsInit]
             static bool IsValidMeasurement(InterferometricMeasurement* measurement, out double delta, out double depth)
@@ -416,77 +527,9 @@ namespace SL3Reader
             }
         }
 
-        [SkipLocalsInit, MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void SeekExactly(long offset)
-        {
-            if (Seek(offset, SeekOrigin.Begin) != offset)
-                throw new IOException("Unable to seek!");
-        }
-
-        internal void AugmentTrajectory()
-        {
-            const double lim = 1.2d;
-            const double C = 1.4326d; // Empirical, around √2.
-
-            List<GeoPoint> coordinates = AugmentedCoordinates;
-            IReadOnlyList<IFrame> frames = Frames;
-            int frameCount = frames.Count; // Initialize the frames.
-            if (frameCount < 1) return;
-
-            (double x0, double y0, double z0, double v0, double t0, double d0) = frames[0].QueryMetric();
-            coordinates.Add(new(x0, y0, d0, z0, 0)); // The first one.
-            double distance = 0, xprev = x0, yprev = y0;
-
-            for (int i = 1; i < frameCount; i++)
-            {
-                IFrame frame = frames[i];
-
-                unsafe
-                {
-                    var fr = (Frame)frame;
-                    var pos = fr.PositionOfFirstByte;
-                    byte* ptr = (byte*)&fr;
-                    int T = *(int*)&ptr[54];
-                }
-
-                (double x1, double y1, double z1, double v1, double t1, double d1) =
-                    frame.QueryMetric();
-
-                (double sin0, double cos0) = double.SinCos(d0);
-                (double sin1, double cos1) = double.SinCos(d1);
-
-                double vx0 = cos0 * v0,
-                       vy0 = sin0 * v0,
-                       vx1 = cos1 * v1,
-                       vy1 = sin1 * v1,
-                       dt = t1 - t0;
-
-                x0 += C * .5d * (vx0 + vx1) * dt;
-                y0 += C * .5d * (vy0 + vy1) * dt;
-
-                d0 = d1; t0 = t1; v0 = v1;
-
-                if (frame.SurveyType is SurveyType.Primary or SurveyType.Secondary or
-                    SurveyType.Unknown7 or SurveyType.Unknown8)
-                {
-
-                    double dy = y0 - y1;
-                    if (double.Abs(dy) > lim)
-                        y0 = y1 + double.CopySign(lim, dy);
-
-                    double dx = x0 - x1;
-                    if (double.Abs(dx) > lim)
-                        x0 = x1 + double.CopySign(lim, dx);
-                }
-
-                coordinates.Add(new(x0, y0, d0, z1, distance += double.Hypot(x0 - xprev, y0 - yprev)));
-                xprev = x0; yprev = y0;
-            }
-        }
-
         #region Dispose Pattern
         private bool disposedValue;
-        protected virtual void Dispose(bool disposing)
+        public virtual void Dispose(bool disposing)
         {
             if (!disposedValue)
             {
@@ -497,19 +540,9 @@ namespace SL3Reader
                     viewAccessor.Dispose();
                     memoryMappedFile.Dispose();
                 }
-
-                // TODO: free unmanaged resources (unmanaged objects) and override finalizer
-                // TODO: set large fields to null
                 disposedValue = true;
             }
         }
-
-        // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
-        // ~SL3Reader()
-        // {
-        //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-        //     Dispose(disposing: false);
-        // }
 
         void IDisposable.Dispose()
         {
