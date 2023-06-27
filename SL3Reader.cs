@@ -30,15 +30,16 @@ namespace SL3Reader
         #endregion End Private variables
 
         [SkipLocalsInit]
-        public unsafe SL3Reader(string path)
+        public unsafe SL3Reader([DisallowNull] string path)
         {
-            long len = new FileInfo(path).Length;
+            ArgumentException.ThrowIfNullOrWhiteSpace(path, nameof(path));
+            long len = new FileInfo(path!).Length;
 
             if (len < (SLFileHeader.Size + Frame.MinimumInitSize))
                 throw new EndOfStreamException("The file is too short to be valid.");
 
             memoryMappedFile = MemoryMappedFile.CreateFromFile(
-                File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.RandomAccess, 0L),
+                File.OpenHandle(path!, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.RandomAccess, 0L),
                 null, len, MemoryMappedFileAccess.Read, HandleInheritability.None, false);
             viewAccessor = memoryMappedFile.CreateViewAccessor(0, len, MemoryMappedFileAccess.Read);
             viewHandle = viewAccessor.SafeMemoryMappedViewHandle;
@@ -56,21 +57,22 @@ namespace SL3Reader
             ReadOnlyCollectionBuilder<nuint> frames = new(estimatedCount);
 
             // Init index lists
-            ReadOnlyCollectionBuilder<nuint> Primary = new(estimatedCount / 8),
-                                             Secondary = new(estimatedCount / 8),
-                                             DownScan = new(estimatedCount / 10),
+            int p8 = estimatedCount / 8, p4 = estimatedCount / 4, p10 = estimatedCount / 10;
+            ReadOnlyCollectionBuilder<nuint> Primary = new(p8),
+                                             Secondary = new(p8),
+                                             DownScan = new(p10),
                                              LeftSidescan = new(),
                                              RightSidescan = new(),
-                                             SideScan = new(estimatedCount / 10),
+                                             SideScan = new(p10),
                                              Unknown6 = new(),
-                                             Unknown7 = new(estimatedCount / 4),
-                                             Unknown8 = new(estimatedCount / 4),
-                                             ThreeDimensional = new(estimatedCount / 10),
+                                             Unknown7 = new(p4),
+                                             Unknown8 = new(p4),
+                                             ThreeDimensional = new(p10),
                                              DebugDigital = new(),
                                              DebugNoise = new();
 
-            ReadOnlyCollectionBuilder<int> coordinate3DHelper = new(estimatedCount / 10);
-            ReadOnlyCollectionBuilder<int> coordinateSidescanHelper = new(estimatedCount / 10);
+            ReadOnlyCollectionBuilder<int> coordinate3DHelper = new(p10);
+            ReadOnlyCollectionBuilder<int> coordinateSidescanHelper = new(p10);
 
             // Init time
             Frame* currentFrame = (Frame*)ptr;
@@ -253,9 +255,12 @@ namespace SL3Reader
         {
             ArgumentNullException.ThrowIfNull(nameof(path));
 
-            if (Directory.Exists(path!))
-                Directory.Delete(path!, true);
-            path = Directory.CreateDirectory(path!).FullName;
+            if (!Path.IsPathRooted(path!))
+            {
+                if (Directory.Exists(path!))
+                    Directory.Delete(path!, true);
+                path = Directory.CreateDirectory(path!).FullName;
+            }
 
             ReadOnlyCollection<nuint> imageFrames = IndexByType[surveyType];
             if (imageFrames.Count < 1) return; // Return when no imagery exists.
@@ -265,6 +270,7 @@ namespace SL3Reader
             List<int> breakpoints = GetBreakPoints(imageFrames, out int maxHeight);
             int numberOfColumns = (int)((Frame*)imageFrames[0])->LengthOfEchoData;
             byte[] buffer = BitmapHelper.CreateBuffer(maxHeight, numberOfColumns);
+            string[] worldJoin = new string[6] { "0", "", "", "0", "", "" };
 
             for (int i = 0, maxIndex = breakpoints.Count - 1; i < maxIndex; i++)
             {
@@ -283,7 +289,7 @@ namespace SL3Reader
 
                 string prefix = GetPrefix(surveyType);
                 using SafeFileHandle handle = File.OpenHandle(Path.Combine(path, prefix + final + ".bmp"),
-                    FileMode.CreateNew, FileAccess.Write, FileShare.None, FileOptions.SequentialScan);
+                    FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.SequentialScan, fileBuffer.Length);
                 RandomAccess.Write(handle, fileBuffer, 0);
                 handle.Close();
 
@@ -294,18 +300,15 @@ namespace SL3Reader
                 var lastStrip = AugmentedCoordinates[Frames.IndexOf(imageFrames[final - 1])];
                 var lastFrame = (Frame*)imageFrames[final - 1];
 
-                double XSize = -(lastStrip.Distance - firstStrip.Distance) / (final - first - 1);
-                double YSize = -10 * lastFrame->MaxRange * .3048 / numberOfColumns;
-                string WorldString = string.Join("\r\n",
-                        new string[6]
-                         {"0",
-                         YSize.ToString(InvariantCulture),
-                         XSize.ToString(InvariantCulture),
-                         "0",
-                         lastStrip.Distance.ToString(InvariantCulture),
-                         lastFrame->SurveyType is SurveyType.SideScan ? (-1400*YSize).ToString(): "0"}, 0, 6);
+                // TODO: Nem jó!
+                double XSize = -(lastStrip.Distance - firstStrip.Distance) / (final - first);
+                double YSize = -10d * lastFrame->MaxRange * .3048d / numberOfColumns;
+                worldJoin[1] = YSize.ToString(InvariantCulture);
+                worldJoin[2] = XSize.ToString(InvariantCulture);
+                worldJoin[4] = lastStrip.Distance.ToString(InvariantCulture);
+                worldJoin[5] = lastFrame->SurveyType is SurveyType.SideScan ? (-1400d * YSize).ToString(InvariantCulture) : "0";
 
-                File.WriteAllText(Path.Combine(path, prefix + final + ".bpw"), WorldString);
+                File.WriteAllText(Path.Combine(path, prefix + final + ".bpw"), string.Join('\n', worldJoin!,0,6));
                 // End world file
             }
 
@@ -394,7 +397,7 @@ namespace SL3Reader
             var coordinate3DHelper = Coordinate3DHelper;
 
             using StreamWriter streamWriter = File.CreateText(path);
-            streamWriter.WriteLine("CampaignID,DateTime,X[Lowrance_m],Y[Lowrance_m],Z[m_WGS84Ellipsoid],Depth[m],Angle[°],Distance[m],Reliability");
+            streamWriter.BaseStream.Write("CampaignID,DateTime,X[Lowrance_m],Y[Lowrance_m],Z[m_WGS84Ellipsoid],Depth[m],Angle[°],Distance[m],Reliability\r\n"u8);
 
             string[] stringArray = GC.AllocateUninitializedArray<string>(9);
 

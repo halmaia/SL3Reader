@@ -2,36 +2,58 @@
 using static System.IO.Path;
 using static System.Console;
 using System.Runtime.CompilerServices;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using System.Collections.ObjectModel;
 
 namespace SL3Reader
 {
     public static class Program
     {
-        public static void Main(string[] args)
+        public static void Main([DisallowNull] string[] args)
         {
+            OutputEncoding = System.Text.Encoding.UTF8;
             if (args!.Length is not 3) // Always non-null.
             {
+                PrintRed("Wrong number of arguments!");
+                WriteLine();
                 PrintUsage();
                 return;
             }
 
             string input = GetFullPath(args![0]);
-            if (!Exists(input))
+            if (!Exists(input!))
             {
-                WriteLine("Input file not found!");
+                PrintRed("Input file not found!");
+                WriteLine();
                 PrintUsage();
                 return;
             }
 
             string output = GetFullPath(args![1]);
-            if (!Exists(GetDirectoryName(output)))
+
+            if (IsPathRooted(output!))
             {
-                WriteLine("Directory not found for the output file!");
+                if (!Exists(output!))
+                {
+                    PrintRed("Root directory not found!");
+                    WriteLine();
+                    PrintUsage();
+                    return;
+                }
+            }
+
+            else if (!Exists(GetDirectoryName(output!)))
+            {
+                PrintRed("Directory not found for the output file!");
+                WriteLine();
                 PrintUsage();
                 return;
             }
 
-            using SL3Reader sl3reader = new(input);
+            using SL3Reader sl3reader = new(input!);
+
+            PrintSummary(sl3reader);
 
             string expSelector = args![2].Trim().ToLowerInvariant();
             switch (expSelector)
@@ -66,40 +88,40 @@ namespace SL3Reader
                     break;
                 case "-u7":
                     sl3reader.ExportImagery(output, SurveyType.Unknown7);
-                    PrintGreen("Frame type Nr.7 imagery exported successfully.\n");
+                    PrintGreen("Frame type №7 imagery exported successfully.\n");
                     break;
                 default:
-                    WriteLine("Invalid third argument (" + expSelector + ").");
+                    WriteLine("Invalid argument (" + expSelector + ").");
                     PrintUsage();
                     return;
             }
-
-            PrintSummary();
 
             return;
 
             static void PrintUsage()
             {
+                WriteLine();
+
                 WriteLine("Usage examples:\n");
 
                 WriteLine("To export route:");
-
-                WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -route\n");
+                WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -route\n");
                 WriteLine("To export 3D points with magnetic heading (e.g. measured with devices like Precision–9):");
-                WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dm\n");
+                WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dm\n");
                 WriteLine("To export 3D points with GNSS heading (e.g. in-built GPS):");
-                WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dg\n");
+                WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dg\n");
 
                 WriteLine("To export side scan imagery:");
-                WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ss\n");
+
+                WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ss\n");
                 WriteLine("To export primary scan imagery:");
-                WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ps\n");
+                WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ps\n");
                 WriteLine("To export secondary scan imagery:");
-                WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ses\n");
+                WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ses\n");
                 WriteLine("To export down scan imagery:");
-                WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ds\n");
+                WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ds\n");
                 WriteLine("To export frame type №7 imagery imagery:");
-                WriteLine("SL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -u7\n");
+                WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -u7\n");
 
                 WriteLine("If either the input file’s name/path or the output file name/path contains space(s) use double quotation mark (\") to enclose it, like \"D:\\My SL3 Files\\Best Catch.sl3\".\n");
 
@@ -107,16 +129,19 @@ namespace SL3Reader
                 WriteLine("https://github.com/halmaia/SL3Reader");
                 WriteLine("For license details see: https://github.com/halmaia/SL3Reader/blob/master/LICENSE.\n");
                 WriteLine();
-
             }
 
             [SkipLocalsInit]
-            void PrintSummary()
+            static void PrintSummary(SL3Reader sl3reader)
             {
+                ReadOnlyDictionary<SurveyType, ReadOnlyCollection<nuint>> indexByType = sl3reader.IndexByType;
+                ReadOnlyCollection<nuint> frames = sl3reader.Frames;
+                int len = frames.Count;
+                System.Globalization.CultureInfo invariantCulture = System.Globalization.CultureInfo.InvariantCulture;
+
                 WriteLine("File statistics:");
-                WriteLine("\tNumber of frames: " + sl3reader.Frames.Count.ToString("# ##0"));
-                
-                System.Collections.ObjectModel.ReadOnlyDictionary<SurveyType, System.Collections.ObjectModel.ReadOnlyCollection<nuint>> indexByType = sl3reader.IndexByType;
+                WriteLine("\tNumber of frames: " + len.ToString("# ##0"));
+
                 WriteLine("\tNumber of primary frames: " + indexByType[SurveyType.Primary].Count.ToString("# ##0"));
                 WriteLine("\tNumber of secondary frames: " + indexByType[SurveyType.Secondary].Count.ToString("# ##0"));
                 WriteLine("\tNumber of left sidescan frames: " + indexByType[SurveyType.LeftSidescan].Count.ToString("# ##0"));
@@ -124,9 +149,18 @@ namespace SL3Reader
                 WriteLine("\tNumber of sidescan frames: " + indexByType[SurveyType.SideScan].Count.ToString("# ##0"));
                 WriteLine("\tNumber of downscan frames: " + indexByType[SurveyType.DownScan].Count.ToString("# ##0"));
                 WriteLine("\tNumber of 3D frames: " + indexByType[SurveyType.ThreeDimensional].Count.ToString("# ##0"));
+                WriteLine("\tDistance covered: " + sl3reader.AugmentedCoordinates.LastOrDefault().Distance.ToString("0.# m", invariantCulture));
+
+                if (len is not 0)
+                {
+                    unsafe
+                    {
+                        WriteLine("\tBegining of the survey: " + ((Frame*)frames[0])->Timestamp.ToString("yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'", invariantCulture));
+                        WriteLine("\tEnd of the survey: " + ((Frame*)frames[len - 1])->Timestamp.ToString("yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'", invariantCulture));
+                    }
+                }
 
                 WriteLine();
-                PrintGreen("\nExport finished successfully.");
             }
 
             [SkipLocalsInit]
@@ -138,6 +172,14 @@ namespace SL3Reader
                 ForegroundColor = ConsoleColor.White;
             }
 
+            [SkipLocalsInit]
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            static void PrintRed(string message)
+            {
+                ForegroundColor = ConsoleColor.Red;
+                WriteLine(message);
+                ForegroundColor = ConsoleColor.White;
+            }
         }
     }
 }
