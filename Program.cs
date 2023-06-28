@@ -1,10 +1,10 @@
 ﻿using System;
-using static System.IO.Path;
 using static System.Console;
 using System.Runtime.CompilerServices;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Collections.ObjectModel;
+using System.IO;
 
 namespace SL3Reader
 {
@@ -21,8 +21,9 @@ namespace SL3Reader
                 return;
             }
 
-            string input = GetFullPath(args![0]);
-            if (!Exists(input!))
+            string input = args![0];
+
+            if (!File.Exists(input))
             {
                 PrintRed("Input file not found!");
                 WriteLine();
@@ -30,64 +31,53 @@ namespace SL3Reader
                 return;
             }
 
-            string output = GetFullPath(args![1]);
-
-            if (IsPathRooted(output!))
+            DirectoryInfo directoryInfo = new(args![1]);
+            if (!(directoryInfo.Parent ?? directoryInfo.Root).Exists)
             {
-                if (!Exists(output!))
-                {
-                    PrintRed("Root directory not found!");
-                    WriteLine();
-                    PrintUsage();
-                    return;
-                }
-            }
-
-            else if (!Exists(GetDirectoryName(output!)))
-            {
-                PrintRed("Directory not found for the output file!");
+                PrintRed("Directory not found for output!");
                 WriteLine();
                 PrintUsage();
                 return;
             }
+            string output = directoryInfo.FullName;
 
             using SL3Reader sl3reader = new(input!);
 
-            PrintSummary(sl3reader);
+            PrintSummary(sl3reader!);
 
             string expSelector = args![2].Trim().ToLowerInvariant();
             switch (expSelector)
             {
                 case "-3dm":
-                    sl3reader.Export3D(output, false, true);
+                    sl3reader.Export3D(output!, false, true);
                     PrintGreen("3D content with magnetic heading exported successfully.\n");
                     break;
                 case "-3dg":
-                    sl3reader.Export3D(output, false, false);
+                    sl3reader.Export3D(output!, false, false);
                     PrintGreen("3D content with GNSS heading exported successfully.\n");
                     break;
                 case "-route":
-                    sl3reader.ExportToCSV(output);
+                    sl3reader.ExportRoutePoints(output!);
                     PrintGreen("Route exported successfully.\n");
                     break;
                 case "-ss":
-                    sl3reader.ExportImagery(output);
+                    sl3reader.ExportImagery(output!);
                     PrintGreen("Side scan imagery exported successfully.\n");
                     break;
                 case "-ps":
-                    sl3reader.ExportImagery(output, SurveyType.Primary);
+                    sl3reader.ExportImagery(output!, SurveyType.Primary);
                     PrintGreen("Primary scan imagery exported successfully.\n");
                     break;
                 case "-ses":
-                    sl3reader.ExportImagery(output, SurveyType.Secondary);
+                    sl3reader.ExportImagery(output!, SurveyType.Secondary);
                     PrintGreen("Secondary scan imagery exported successfully.\n");
                     break;
                 case "-ds":
-                    sl3reader.ExportImagery(output, SurveyType.DownScan);
+                    sl3reader.ExportImagery(output!, SurveyType.DownScan);
                     PrintGreen("DownScan imagery exported successfully.\n");
                     break;
                 case "-u7":
-                    sl3reader.ExportImagery(output, SurveyType.Unknown7);
+                    sl3reader.ExportImagery(output!, SurveyType.Unknown7);
                     PrintGreen("Frame type №7 imagery exported successfully.\n");
                     break;
                 default:
@@ -132,7 +122,7 @@ namespace SL3Reader
             }
 
             [SkipLocalsInit]
-            static void PrintSummary(SL3Reader sl3reader)
+            static void PrintSummary([DisallowNull] SL3Reader sl3reader)
             {
                 ReadOnlyDictionary<SurveyType, ReadOnlyCollection<nuint>> indexByType = sl3reader.IndexByType;
                 ReadOnlyCollection<nuint> frames = sl3reader.Frames;

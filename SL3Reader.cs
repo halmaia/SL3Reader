@@ -79,9 +79,12 @@ namespace SL3Reader
             Frame.InitTimestampBase(currentFrame->HardwareTime);
 
             // Load frames
-            for (int i = 0; ptr < maxPtr; ptr += currentFrame->LengthOfFrame, i++)
+            for (int i = 0;
+                ptr < maxPtr && (ptr + currentFrame->LengthOfFrame) < maxPtr; // Use whole frames only!
+                ptr += currentFrame->LengthOfFrame,
+                currentFrame = (Frame*)ptr,
+                i++)
             {
-                currentFrame = (Frame*)ptr;
                 nuint current = (nuint)currentFrame;
                 frames.Add(current);
                 switch (currentFrame->SurveyType)
@@ -219,7 +222,7 @@ namespace SL3Reader
             }
         }
 
-        public unsafe void ExportToCSV(string path)
+        public unsafe void ExportRoutePoints(string path)
         {
             ReadOnlyCollection<nuint> frames = Frames;
             int count = frames.Count;
@@ -254,13 +257,6 @@ namespace SL3Reader
         public unsafe void ExportImagery(string path, SurveyType surveyType = SurveyType.SideScan)
         {
             ArgumentNullException.ThrowIfNull(nameof(path));
-
-            if (!Path.IsPathRooted(path!))
-            {
-                if (Directory.Exists(path!))
-                    Directory.Delete(path!, true);
-                path = Directory.CreateDirectory(path!).FullName;
-            }
 
             ReadOnlyCollection<nuint> imageFrames = IndexByType[surveyType];
             if (imageFrames.Count < 1) return; // Return when no imagery exists.
@@ -308,7 +304,7 @@ namespace SL3Reader
                 worldJoin[4] = lastStrip.Distance.ToString(InvariantCulture);
                 worldJoin[5] = lastFrame->SurveyType is SurveyType.SideScan ? (-1400d * YSize).ToString(InvariantCulture) : "0";
 
-                File.WriteAllText(Path.Combine(path, prefix + final + ".bpw"), string.Join('\n', worldJoin!,0,6));
+                File.WriteAllText(Path.Combine(path, prefix + final + ".bpw"), string.Join('\n', worldJoin!, 0, 6));
                 // End world file
             }
 
@@ -327,13 +323,14 @@ namespace SL3Reader
 
             static unsafe List<int> GetBreakPoints(ReadOnlyCollection<nuint> framesToCheck, out int contiguousLength)
             {
-                int i = 0, frameCount = framesToCheck.Count;
-                float previousRange = ((Frame*)framesToCheck[i])->MaxRange;
+                int frameCount = framesToCheck.Count;
+                float previousRange = ((Frame*)framesToCheck[0])->MaxRange;
 
-                List<int> breakpoints = new(frameCount / 300) { i++ }; // ~300 empirical guess. 
-                                                                       // 'i' have to be incremented to prevent double test.
+                List<int> breakpoints = new(frameCount / 300) { 0 }; // ~300 empirical guess. 
+                                                                     // 'i' have to be incremented to prevent double test.
 
-                for (; i < frameCount; i++)
+                int i = 1;
+                for (; i != frameCount; i++)
                 {
                     float currentRange = ((Frame*)framesToCheck[i])->MaxRange;
                     if (currentRange != previousRange)
