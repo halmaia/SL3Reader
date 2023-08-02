@@ -129,11 +129,10 @@ namespace SL3Reader
                 }
             }
 
-            // TODO: check premature end.
-
             // Init AugmentedCoordinates
-            AugmentedCoordinates = frames.Count is 0 ? new ReadOnlyCollectionBuilder<GeoPoint>().ToReadOnlyCollection() :
-                            AugmentTrajectory(frames);
+            AugmentedCoordinates = frames.Count is 0 ?
+                new ReadOnlyCollectionBuilder<GeoPoint>().ToReadOnlyCollection() :
+                AugmentTrajectory(frames);
 
             Frames = frames.ToReadOnlyCollection();
 
@@ -226,7 +225,7 @@ namespace SL3Reader
         {
             ReadOnlyCollection<nuint> frames = Frames;
             int count = frames.Count;
-            using var textWriter = new StreamWriter(path,
+            using StreamWriter textWriter = new(path,
                 new FileStreamOptions()
                 {
                     Access = FileAccess.Write,
@@ -247,7 +246,7 @@ namespace SL3Reader
             scoped Span<char> buffer = stackalloc char[256];
             for (int i = 0; i != count; i++)
             {
-                textWriter.Write(((Frame*)frames[i])->TryFormat(buffer));
+                textWriter.Write(((Frame*)frames[i])->Format(buffer));
                 textWriter.WriteLine(augmentedCoordinates[i].TryFormat(buffer));
             }
             textWriter.Close();

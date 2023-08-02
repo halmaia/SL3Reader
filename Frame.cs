@@ -78,6 +78,7 @@ namespace SL3Reader
         [field: FieldOffset(120)] public readonly uint UnknownAt120 { get; } // (120)
         [field: FieldOffset(124)] public readonly uint Milliseconds { get; } // (124)
 
+        // Derived:
         public readonly long DataOffset => PositionOfFirstByte + (FrameType is FrameType.Extended ? ExtendedSize : BasicSize);
         #endregion Basic properties
 
@@ -129,8 +130,8 @@ namespace SL3Reader
         #endregion
 
         #region WGS84
-        public double Longitude => X / PolarRadius * RadToDeg;
-        public double Latitude => RadToDeg * double.Atan(double.Sinh(Y / PolarRadius));
+        public readonly double Longitude => X / PolarRadius * RadToDeg;
+        public readonly double Latitude => RadToDeg * double.Atan(double.Sinh(Y / PolarRadius));
         #endregion WGS84
 
         #region String generation
@@ -158,57 +159,56 @@ namespace SL3Reader
             Milliseconds.ToString()});
         }
 
-        public readonly Span<char> TryFormat(Span<char> buffer)
+        public readonly Span<char> Format(Span<char> buffer)
         {
-            var invar = invariantCulture;
-            CampaignID.TryFormat(buffer, out int pos, provider: invar);
+            CampaignID.TryFormat(buffer, out int pos, provider: invariantCulture);
             buffer[pos++] = ',';
-            Timestamp.TryFormat(buffer[pos..], out int charWritten, DateTimeFormat, invar);
+            Timestamp.TryFormat(buffer[pos..], out int charWritten, DateTimeFormat, invariantCulture);
             pos += charWritten;
             buffer[pos++] = ',';
             Enum.TryFormat(SurveyType, buffer[pos..], out charWritten);
             pos += charWritten;
             buffer[pos++] = ',';
-            WaterDepth.TryFormat(buffer[pos..], out charWritten, "0.###", provider: invar);
+            WaterDepth.TryFormat(buffer[pos..], out charWritten, "0.###", provider: invariantCulture);
             pos += charWritten;
             buffer[pos++] = ',';
-            Longitude.TryFormat(buffer[pos..], out charWritten, "0.000000", invar);
+            Longitude.TryFormat(buffer[pos..], out charWritten, "0.000000", invariantCulture);
             pos += charWritten;
             buffer[pos++] = ',';
-            Latitude.TryFormat(buffer[pos..], out charWritten, "0.0000000", invar);
+            Latitude.TryFormat(buffer[pos..], out charWritten, "0.0000000", invariantCulture);
             pos += charWritten;
             buffer[pos++] = ',';
-            GNSSAltitude.TryFormat(buffer[pos..], out charWritten, "0.###", invar);
+            GNSSAltitude.TryFormat(buffer[pos..], out charWritten, "0.###", invariantCulture);
             pos += charWritten;
             buffer[pos++] = ',';
-            GNSSHeading.TryFormat(buffer[pos..], out charWritten, "0.###", invar);
+            GNSSHeading.TryFormat(buffer[pos..], out charWritten, "0.###", invariantCulture);
             pos += charWritten;
             buffer[pos++] = ',';
-            GNSSSpeed.TryFormat(buffer[pos..], out charWritten, "0.###", invar);
+            GNSSSpeed.TryFormat(buffer[pos..], out charWritten, "0.###", invariantCulture);
             pos += charWritten;
             buffer[pos++] = ',';
-            MagneticHeading.TryFormat(buffer[pos..], out charWritten, "0.###", invar);
+            MagneticHeading.TryFormat(buffer[pos..], out charWritten, "0.###", invariantCulture);
             pos += charWritten;
             buffer[pos++] = ',';
-            MinRange.TryFormat(buffer[pos..], out charWritten, "0.###", invar);
+            MinRange.TryFormat(buffer[pos..], out charWritten, "0.###", invariantCulture);
             pos += charWritten;
             buffer[pos++] = ',';
-            MaxRange.TryFormat(buffer[pos..], out charWritten, "0.###", invar);
+            MaxRange.TryFormat(buffer[pos..], out charWritten, "0.###", invariantCulture);
             pos += charWritten;
             buffer[pos++] = ',';
-            WaterTemperature.TryFormat(buffer[pos..], out charWritten, "0.#", invar);
+            WaterTemperature.TryFormat(buffer[pos..], out charWritten, "0.#", invariantCulture);
             pos += charWritten;
             buffer[pos++] = ',';
-            WaterSpeed.TryFormat(buffer[pos..], out charWritten, "0.###", invar);
+            WaterSpeed.TryFormat(buffer[pos..], out charWritten, "0.###", invariantCulture);
             pos += charWritten;
             buffer[pos++] = ',';
-            HardwareTime.TryFormat(buffer[pos..], out charWritten, provider: invar);
+            HardwareTime.TryFormat(buffer[pos..], out charWritten, provider: invariantCulture);
             pos += charWritten;
             buffer[pos++] = ',';
             Enum.TryFormat(Frequency, buffer[pos..], out charWritten);
             pos += charWritten;
             buffer[pos++] = ',';
-            Milliseconds.TryFormat(buffer[pos..], out charWritten, provider: invar);
+            Milliseconds.TryFormat(buffer[pos..], out charWritten, provider: invariantCulture);
             pos += charWritten;
             buffer[pos++] = ',';
             return buffer[..pos];
@@ -216,7 +216,6 @@ namespace SL3Reader
 
         private readonly string GetDebuggerDisplay()
         {
-            CultureInfo invariantCulture = Frame.invariantCulture;
             return string.Join(DebugFieldSeparator, new string[5]
             {
                 SurveyType.ToString(),
@@ -236,9 +235,5 @@ namespace SL3Reader
                     MillisecondsToSeconds * Milliseconds,
                     Math.Tau - GNSSHeading + HalfPI);
         #endregion Unpack support
-
-        #region Navigation
-
-        #endregion End Navigation
     };
 }
