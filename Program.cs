@@ -52,9 +52,17 @@ namespace SL3Reader
                     sl3reader.Export3D(output!, false, true);
                     PrintGreen("3D content with magnetic heading exported successfully.\n");
                     break;
+                case "-3dm+":
+                    sl3reader.Export3D(output!, true, true);
+                    PrintGreen("3D content with magnetic heading exported successfully. Unreliable points are included.\n");
+                    break;
                 case "-3dg":
                     sl3reader.Export3D(output!, false, false);
                     PrintGreen("3D content with GNSS heading exported successfully.\n");
+                    break;
+                case "-3dg+":
+                    sl3reader.Export3D(output!, true, false);
+                    PrintGreen("3D content with GNSS heading exported successfully. Unreliable points are included.\n");
                     break;
                 case "-route":
                     sl3reader.ExportRoutePoints(output!);
@@ -98,8 +106,12 @@ namespace SL3Reader
                 WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -route\n");
                 WriteLine("To export 3D points with magnetic heading (e.g. measured with devices like Precision–9):");
                 WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dm\n");
+                WriteLine("To export 3D points with magnetic heading (e.g. measured with devices like Precision–9) with unreliable points:");
+                WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dm+\n");
                 WriteLine("To export 3D points with GNSS heading (e.g. in-built GPS):");
                 WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dg\n");
+                WriteLine("To export 3D points with GNSS heading (e.g. in-built GPS) with unreliable points:");
+                WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dg+\n");
 
                 WriteLine("To export side scan imagery:");
 

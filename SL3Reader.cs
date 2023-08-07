@@ -515,6 +515,8 @@ namespace SL3Reader
                 }
             }
 
+            return;
+
             [SkipLocalsInit]
             static bool IsValidMeasurement(InterferometricMeasurement* measurement, out double delta, out double depth)
             {
