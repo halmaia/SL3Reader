@@ -7,11 +7,12 @@ using static System.Globalization.CultureInfo;
 
 namespace SL3Reader
 {
-    [StructLayout(LayoutKind.Explicit, Size = ExtendedSize)]
+    [StructLayout(LayoutKind.Explicit, Size = ExtendedSizeV10)]
     [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
     public readonly struct Frame
     {
-        public const int ExtendedSize = 168;
+        public const int ExtendedSizeV10 = 168;
+        public const int ExtendedSizeV13 = 180;
         public const int BasicSize = 128;
         public const int MinimumInitSize = 44;
 
@@ -32,7 +33,7 @@ namespace SL3Reader
 
         #region Basic Properties
         [field: FieldOffset(0)] public readonly uint PositionOfFirstByte { get; } // (0)
-        [field: FieldOffset(4)] public readonly uint UnknownAt4 { get; } // (4) In my files it is always 10.
+        [field: FieldOffset(4)] public readonly uint Version { get; } // (4) 
         [field: FieldOffset(8)] public readonly ushort LengthOfFrame { get; } // (8)
         [field: FieldOffset(10)] public readonly ushort PreviousFrameLength { get; } // (10)
         [field: FieldOffset(12)] public readonly SurveyType SurveyType { get; } // (12)
@@ -75,7 +76,21 @@ namespace SL3Reader
         [field: FieldOffset(124)] public readonly uint Milliseconds { get; } // (124)
 
         // Derived:
-        public readonly long DataOffset => PositionOfFirstByte + (FrameType is FrameType.Extended ? ExtendedSize : BasicSize);
+        /// <summary>
+        /// Provides the data offset relatively to the begining of the frame.
+        /// </summary>
+        public readonly int RelativeDataOffset
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => FrameType is FrameType.Extended
+                    ? Version switch
+                    {
+                        10 => ExtendedSizeV10,
+                        13 => ExtendedSizeV13,
+                        _ => throw new NotImplementedException("Unsupported frame type. Contact developer at GitHub!")
+                    }
+                    : BasicSize;
+        }
         #endregion Basic properties
 
         #region Type support
@@ -115,6 +130,10 @@ namespace SL3Reader
         public readonly uint Last3DFrameOffset => FrameType is FrameType.Extended ? last3DFrameOffset : throw new InvalidFrameTypeException();  // (164)
 
         #endregion Extended properties
+
+        #region Extended v13 properties
+        // In version 13 the frame is bigger.
+        #endregion Extended v13 properties
 
         #region DateTime support
         private static DateTime timestampBase;

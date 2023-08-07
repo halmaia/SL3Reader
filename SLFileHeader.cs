@@ -26,7 +26,7 @@ namespace SL3Reader
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly void ThrowIfInvalidFormatDetected()
         {
-            if (FileFormat != LogFileFormat.SL3)
+            if (FileFormat is not LogFileFormat.SL3)
                 throw new InvalidDataException("Unsupported file type. Expected type SL3.");
         }
     }

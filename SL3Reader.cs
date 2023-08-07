@@ -206,11 +206,11 @@ namespace SL3Reader
                     else
                     {
                         double dy = y0 - y1;
-                        if (double.Abs(dy) > 50) // Detect seriuos errors
+                        if (double.Abs(dy) > 50) // Detect seriuos errors.
                             y0 = frame->Y;
 
                         double dx = x0 - x1;
-                        if (double.Abs(dx) > 50)
+                        if (double.Abs(dx) > 50) // Detect seriuos errors.
                             x0 = frame->X;
                     }
 
@@ -275,7 +275,7 @@ namespace SL3Reader
                     out Span<byte> fileBuffer,
                     out Span<byte> pixelData);
 
-                byte* offset = ((Frame*)imageFrames[0])->FrameType is FrameType.Basic ? (byte*)Frame.BasicSize : (byte*)Frame.ExtendedSize;
+                byte* offset = ((Frame*)imageFrames[0])->FrameType is FrameType.Basic ? (byte*)Frame.BasicSize : (byte*)Frame.ExtendedSizeV10;
 
                 fixed (byte* pixelPtr = pixelData)
                     for (int j = first, k = 0; j < final; j++)
@@ -368,7 +368,7 @@ namespace SL3Reader
                 for (int i = 0; i < unknown8FrameCount - 1; i++)
                 {
                     nuint ptr = unknown8Frames[i];
-                    Buffer.MemoryCopy((byte*)(ptr + (nuint)((Frame*)ptr)->DataOffset), p, 512, 512);
+                    Buffer.MemoryCopy((byte*)(ptr + (nuint)((Frame*)ptr)->RelativeDataOffset), p, 512, 512);
                     for (int j = 0; j < 256; j += 2)
                     {
                         Debug.Print($"{buffer[j]}, {buffer[1 + j]}");
@@ -389,18 +389,17 @@ namespace SL3Reader
             int frames3DLength = frames3D.Count;
             if (frames3DLength < 1) return;
             ReadOnlyCollection<GeoPoint> augmentedCoordinates = AugmentedCoordinates;
-            var coordinate3DHelper = Coordinate3DHelper;
+            ReadOnlyCollection<int> coordinate3DHelper = Coordinate3DHelper;
 
-            using StreamWriter streamWriter = File.CreateText(path);
+            using StreamWriter streamWriter = File.CreateText(path!);
             streamWriter.BaseStream.Write("CampaignID,DateTime,X[Lowrance_m],Y[Lowrance_m],Z[m_WGS84Ellipsoid],Depth[m],Angle[°],Distance[m],Reliability\r\n"u8);
 
             string[] stringArray = GC.AllocateUninitializedArray<string>(9);
 
-
             for (int i = 0; i < frames3DLength; i++)
             {
                 Frame* frame = (Frame*)frames3D[i];
-                ThreeDimensionalFrameHeader* header = (ThreeDimensionalFrameHeader*)(((byte*)frame) + Frame.ExtendedSize);
+                ThreeDimensionalFrameHeader* header = (ThreeDimensionalFrameHeader*)((byte*)frame + frame->RelativeDataOffset);
 
                 // TODO: Remove intermediate solution:
                 GeoPoint augmentedCoordinate = augmentedCoordinates[coordinate3DHelper[i]];
@@ -521,7 +520,7 @@ namespace SL3Reader
             {
                 delta = measurement->Delta;
                 depth = measurement->Depth;
-                return delta is not < 0.001 and not > 5000.0 && depth is not < 1 and not > 250.0;
+                return delta is not < 0.001 and not > 5000.0 && depth is not < 1 and not > 600.0;
             }
         }
 
