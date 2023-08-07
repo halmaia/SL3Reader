@@ -275,7 +275,7 @@ namespace SL3Reader
                     out Span<byte> fileBuffer,
                     out Span<byte> pixelData);
 
-                byte* offset = ((Frame*)imageFrames[0])->FrameType is FrameType.Basic ? (byte*)Frame.BasicSize : (byte*)Frame.ExtendedSizeV10;
+                byte* offset = (byte*)((Frame*)imageFrames[0])->RelativeDataOffset;
 
                 fixed (byte* pixelPtr = pixelData)
                     for (int j = first, k = 0; j < final; j++)
@@ -290,9 +290,9 @@ namespace SL3Reader
                 // World file
 
                 // TODO: Remove intermediate solution:
-                var firstStrip = AugmentedCoordinates[Frames.IndexOf(imageFrames[first])];
-                var lastStrip = AugmentedCoordinates[Frames.IndexOf(imageFrames[final - 1])];
-                var lastFrame = (Frame*)imageFrames[final - 1];
+                GeoPoint firstStrip = AugmentedCoordinates[Frames.IndexOf(imageFrames[first])];
+                GeoPoint lastStrip = AugmentedCoordinates[Frames.IndexOf(imageFrames[final - 1])];
+                Frame* lastFrame = (Frame*)imageFrames[final - 1];
 
                 // TODO: Nem jó!
                 double XSize = -(lastStrip.Distance - firstStrip.Distance) / (final - first);

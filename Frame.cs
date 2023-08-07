@@ -7,6 +7,8 @@ using static System.Globalization.CultureInfo;
 
 namespace SL3Reader
 {
+    // We might need a refactoring. Seemingly it is not a single frame, but one long header,
+    // and extra information panel and the data itself.
     [StructLayout(LayoutKind.Explicit, Size = ExtendedSizeV10)]
     [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
     public readonly struct Frame
