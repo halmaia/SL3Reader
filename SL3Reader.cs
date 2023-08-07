@@ -236,7 +236,7 @@ namespace SL3Reader
                     BufferSize = 151 * count
                 });
 
-            textWriter.BaseStream.Write("CampaignID[#],DateTime[UTC],SurveyType,WaterDepth[Feet],Longitude[°WGS48],Latitude[°WGS84],GNSSAltitude[Feet_WGS84Ellipsoid],GNSSHeading[rad_azimuth],GNSSSpeed[m/s],MagneticHeading[rad_azimuth],MinRange[Feet],MaxRange[Feet],WaterTemperature[°C],WaterSpeed[Feet],HardwareTime[ms],Frequency,Milliseconds[ms],AugmentedX[m],AugmentedY[m]"u8);
+            textWriter.BaseStream.Write("CampaignID[#],DateTime[UTC],SurveyType,WaterDepth[Feet],Longitude[°WGS48],Latitude[°WGS84],GNSSAltitude[Feet_WGS84],GNSSHeading[rad_azimuth],GNSSSpeed[m/s],MagneticHeading[rad_azimuth],MinRange[Feet],MaxRange[Feet],WaterTemperature[°C],WaterSpeed[Feet],HardwareTime[ms],Frequency,Milliseconds[ms],AugmentedX[m],AugmentedY[m]"u8);
 
             // TODO: Filter is not working!
             //ReadOnlyCollection<nuint> frames = filter is SurveyType.All ? Frames : IndexByType[filter];
@@ -282,7 +282,8 @@ namespace SL3Reader
                         Buffer.MemoryCopy(imageFrames[j] + offset, pixelPtr + (fullStride * k++), numberOfColumns, numberOfColumns);
 
                 string prefix = GetPrefix(surveyType);
-                using SafeFileHandle handle = File.OpenHandle(Path.Combine(path, prefix + final + ".bmp"),
+                string filePath = Path.Combine(path, prefix + final + ".bmp");
+                using SafeFileHandle handle = File.OpenHandle(filePath!,
                     FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.SequentialScan, fileBuffer.Length);
                 RandomAccess.Write(handle, fileBuffer, 0);
                 handle.Close();
@@ -304,6 +305,9 @@ namespace SL3Reader
 
                 File.WriteAllText(Path.Combine(path, prefix + final + ".bpw"), string.Join('\n', worldJoin!, 0, 6));
                 // End world file
+
+                // AUX file
+                WriteAUXFile(filePath);
             }
 
             [SkipLocalsInit, MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -392,7 +396,7 @@ namespace SL3Reader
             ReadOnlyCollection<int> coordinate3DHelper = Coordinate3DHelper;
 
             using StreamWriter streamWriter = File.CreateText(path!);
-            streamWriter.BaseStream.Write("CampaignID,DateTime,X[Lowrance_m],Y[Lowrance_m],Z[m_WGS84Ellipsoid],Depth[m],Angle[°],Distance[m],Reliability\r\n"u8);
+            streamWriter.BaseStream.Write("CampaignID,DateTime,X[Lowrance_m],Y[Lowrance_m],Z[m_WGS84],Depth[m],Angle[°],Distance[m],Reliability\r\n"u8);
 
             string[] stringArray = GC.AllocateUninitializedArray<string>(9);
 
@@ -525,6 +529,31 @@ namespace SL3Reader
                 return delta is not < 0.001 and not > 5000.0 && depth is not < 1 and not > 600.0;
             }
         }
+
+        #region AUX support
+        [SkipLocalsInit]
+        private static void WriteAUXFile(string originalPath)
+        {
+            ReadOnlySpan<byte> fileBuffer = "<PAMDataset>\n  <Metadata>\n    <MDI key=\"DataType\">Processed</MDI>\n    <MDI key=\"SensorName\">Lowrance StructureScan3D</MDI>\n  </Metadata>\n  <PAMRasterBand band=\"1\">\n    <Histograms>\n      <HistItem>\n        <HistMin>-0.5</HistMin>\n        <HistMax>168.5</HistMax>\n        <BucketCount>169</BucketCount>\n        <IncludeOutOfRange>1</IncludeOutOfRange>\n        <Approximate>1</Approximate>\n        <HistCounts>194107|13838|0|0|0|0|0|0|0|0|13204|0|0|0|0|0|0|0|0|0|12328|0|0|0|11492|0|0|10383|0|0|0|9912|0|0|4621|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|4391|0|0|0|8479|0|0|7695|0|0|0|7038|0|0|6490|5879|5554|5039|4656|4477|4055|3763|3511|3250|3025|2814|2592|2443|2320|2267|1980|1861|3424|3258|2877|2640|2440|2289|2162|2879|1758|1709|1500|1480|1446|1320|2954|2051|1884|1743|1506|1425|1265|1123|1017|909|838|775|729|641|1114|938|852|731|632|547|495|441|427|364|363|317|306|292|255|361|509|315|314|314|360|252|241|204|293|178|206|185|262|294|175|271|217|139|212|182|126|155|160|80|124|1993|85|145|208|157|184|190|129|170|104|84|117|157|381|334|658|1195</HistCounts>\n      </HistItem>\n    </Histograms>\n    <Metadata>\n      <MDI key=\"STATISTICS_COVARIANCES\">1748.548089737012</MDI>\n      <MDI key=\"STATISTICS_MAXIMUM\">255</MDI>\n      <MDI key=\"STATISTICS_MEAN\">128</MDI>\n      <MDI key=\"STATISTICS_MEDIAN\">128</MDI>\n      <MDI key=\"STATISTICS_MINIMUM\">0</MDI>\n      <MDI key=\"STATISTICS_SKIPFACTORX\">1</MDI>\n      <MDI key=\"STATISTICS_SKIPFACTORY\">1</MDI>\n      <MDI key=\"STATISTICS_STDDEV\">16</MDI>\n    </Metadata>\n  </PAMRasterBand>\n</PAMDataset>"u8;
+            using SafeFileHandle handle = File.OpenHandle(Path.ChangeExtension(originalPath, ".bmp.aux.xml"),
+            FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.SequentialScan, fileBuffer.Length);
+            RandomAccess.Write(handle, fileBuffer, 0);
+            handle.Close();
+        }
+        #endregion
+
+        #region PRJ support
+        [SkipLocalsInit]
+        private static void WritePRJFile(string originalPath)
+        {
+            using SafeFileHandle handle = File.OpenHandle(Path.ChangeExtension(originalPath, ".prj"),
+            FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.SequentialScan, 805);
+            RandomAccess.Write(handle,
+                "PROJCS[\"Lowrance_Mercator\",GEOGCS[\"Lowrance_Sphere\",DATUM[\"D_Lowrance_Sphere\",SPHEROID[\"Lowrance_Sphere\",6356752.31424518,0.0]],PRIMEM[\"Greenwich\",0.0,AUTHORITY[\"EPSG\",8901]],UNIT[\"Degree\",0.0174532925199433,AUTHORITY[\"EPSG\",9102]]],PROJECTION[\"Mercator\",AUTHORITY[\"Esri\",43004]],PARAMETER[\"False_Easting\",0.0,AUTHORITY[\"Esri\",100001]],PARAMETER[\"False_Northing\",0.0,AUTHORITY[\"Esri\",100002]],PARAMETER[\"Central_Meridian\",0.0,AUTHORITY[\"Esri\",100010]],PARAMETER[\"Standard_Parallel_1\",0.0,AUTHORITY[\"Esri\",100025]],UNIT[\"Meter\",1.0,AUTHORITY[\"EPSG\",9001]]],VERTCS[\"WGS_1984_Geoid\",VDATUM[\"WGS_1984_Geoid\",AUTHORITY[\"Esri\",105100]],PARAMETER[\"Vertical_Shift\",0.0,AUTHORITY[\"Esri\",100006]],PARAMETER[\"Direction\",1.0,AUTHORITY[\"Esri\",100007]],UNIT[\"Meter\",1.0,AUTHORITY[\"EPSG\",9001]],AUTHORITY[\"Esri\",105700]]"u8, 
+                0);
+            handle.Close();
+        }
+        #endregion
 
         #region Dispose Pattern
         private bool disposedValue;

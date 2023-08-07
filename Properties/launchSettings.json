@@ -2,7 +2,7 @@
   "profiles": {
     "SL3Reader": {
       "commandName": "Project",
-      "commandLineArgs": "\"C:\\Users\\halmaia\\Downloads\\Sonar_2023-08-06_12.43.36.sl3\"  F:\\routeU.csv -3dg+"
+      "commandLineArgs": "\"C:\\Users\\halmaia\\Downloads\\Sonar_2023-08-06_12.43.36.sl3\"  F:\\DS\\ -DS"
     }
   }
 }
