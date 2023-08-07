@@ -4,10 +4,6 @@ using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using System.Globalization;
 using static System.Globalization.CultureInfo;
-using System.Buffers.Text;
-using System.Diagnostics.CodeAnalysis;
-using System.Text;
-using System.Buffers;
 
 namespace SL3Reader
 {
@@ -40,7 +36,7 @@ namespace SL3Reader
         [field: FieldOffset(8)] public readonly ushort LengthOfFrame { get; } // (8)
         [field: FieldOffset(10)] public readonly ushort PreviousFrameLength { get; } // (10)
         [field: FieldOffset(12)] public readonly SurveyType SurveyType { get; } // (12)
-        [field: FieldOffset(14)] public readonly short PackingAt14 { get; } // (14) Always 0 for me.
+        [field: FieldOffset(14)] public readonly short UnknownAt14 { get; } // (14) Always 0 for me.
         [field: FieldOffset(16)] public readonly uint CampaignID { get; } // (16)
         [field: FieldOffset(20)] public readonly float MinRange { get; } // (20)
         [field: FieldOffset(24)] public readonly float MaxRange { get; } // (24)
@@ -74,7 +70,7 @@ namespace SL3Reader
         [field: FieldOffset(112)] public readonly float MagneticHeading { get; } // (112)
 
         [field: FieldOffset(116)] public readonly DataValidity Flags { get; } // (116)
-        [field: FieldOffset(118)] public readonly ushort PackingAt118 { get; } // (118)
+        [field: FieldOffset(118)] public readonly ushort UnknownAt118 { get; } // (118)
         [field: FieldOffset(120)] public readonly uint UnknownAt120 { get; } // (120)
         [field: FieldOffset(124)] public readonly uint Milliseconds { get; } // (124)
 
@@ -144,11 +140,11 @@ namespace SL3Reader
             Timestamp.ToString(DateTimeFormat, invariantCulture),
             SurveyType.ToString(),
             WaterDepth.ToString("0.###", invariantCulture),
-            Longitude.ToString("0.#######", invariantCulture),
-            Latitude.ToString("0.#######", invariantCulture),
+            Longitude.ToString("0.000000", invariantCulture),
+            Latitude.ToString("0.000000", invariantCulture),
             GNSSAltitude.ToString("0.###", invariantCulture),
             GNSSHeading.ToString("0.###", invariantCulture),
-            GNSSSpeed.ToString("0.####", invariantCulture),
+            GNSSSpeed.ToString("0.###", invariantCulture),
             MagneticHeading.ToString("0.###",invariantCulture),
             MinRange.ToString("0.###", invariantCulture),
             MaxRange.ToString("0.###", invariantCulture),
@@ -159,7 +155,7 @@ namespace SL3Reader
             Milliseconds.ToString()});
         }
 
-        public readonly Span<char> Format(Span<char> buffer)
+        public readonly ReadOnlySpan<char> Format(Span<char> buffer)
         {
             CampaignID.TryFormat(buffer, out int pos, provider: invariantCulture);
             buffer[pos++] = ',';
@@ -169,7 +165,7 @@ namespace SL3Reader
             Enum.TryFormat(SurveyType, buffer[pos..], out charWritten);
             pos += charWritten;
             buffer[pos++] = ',';
-            WaterDepth.TryFormat(buffer[pos..], out charWritten, "0.###", provider: invariantCulture);
+            WaterDepth.TryFormat(buffer[pos..], out charWritten, "0.###", invariantCulture);
             pos += charWritten;
             buffer[pos++] = ',';
             Longitude.TryFormat(buffer[pos..], out charWritten, "0.000000", invariantCulture);
@@ -214,9 +210,8 @@ namespace SL3Reader
             return buffer[..pos];
         }
 
-        private readonly string GetDebuggerDisplay()
-        {
-            return string.Join(DebugFieldSeparator, new string[5]
+        private readonly string GetDebuggerDisplay() =>
+            string.Join(DebugFieldSeparator, new string[5]
             {
                 SurveyType.ToString(),
                 WaterDepth.ToString(invariantCulture) + '′',
@@ -224,7 +219,6 @@ namespace SL3Reader
                 MaxRange.ToString(invariantCulture),
                 FrameType.ToString()
             });
-        }
         #endregion String generation
 
         #region Unpack support
@@ -236,4 +230,4 @@ namespace SL3Reader
                     Math.Tau - GNSSHeading + HalfPI);
         #endregion Unpack support
     };
-}
+};

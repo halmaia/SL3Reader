@@ -247,10 +247,9 @@ namespace SL3Reader
             for (int i = 0; i != count; i++)
             {
                 textWriter.Write(((Frame*)frames[i])->Format(buffer));
-                textWriter.WriteLine(augmentedCoordinates[i].TryFormat(buffer));
+                textWriter.WriteLine(augmentedCoordinates[i].Format(buffer));
             }
             textWriter.Close();
-
         }
 
         public unsafe void ExportImagery(string path, SurveyType surveyType = SurveyType.SideScan)
@@ -260,7 +259,7 @@ namespace SL3Reader
             ReadOnlyCollection<nuint> imageFrames = IndexByType[surveyType];
             if (imageFrames.Count < 1) return; // Return when no imagery exists.
 
-            CultureInfo InvariantCulture = CultureInfo.InvariantCulture;
+            CultureInfo invariantCulture = CultureInfo.InvariantCulture;
 
             List<int> breakpoints = GetBreakPoints(imageFrames, out int maxHeight);
             int numberOfColumns = (int)((Frame*)imageFrames[0])->LengthOfEchoData;
@@ -298,10 +297,10 @@ namespace SL3Reader
                 // TODO: Nem jó!
                 double XSize = -(lastStrip.Distance - firstStrip.Distance) / (final - first);
                 double YSize = -10d * lastFrame->MaxRange * .3048d / numberOfColumns;
-                worldJoin[1] = YSize.ToString(InvariantCulture);
-                worldJoin[2] = XSize.ToString(InvariantCulture);
-                worldJoin[4] = lastStrip.Distance.ToString(InvariantCulture);
-                worldJoin[5] = lastFrame->SurveyType is SurveyType.SideScan ? (-1400d * YSize).ToString(InvariantCulture) : "0";
+                worldJoin[1] = YSize.ToString(invariantCulture);
+                worldJoin[2] = XSize.ToString(invariantCulture);
+                worldJoin[4] = lastStrip.Distance.ToString(invariantCulture);
+                worldJoin[5] = lastFrame->SurveyType is SurveyType.SideScan ? (-1400d * YSize).ToString(invariantCulture) : "0";
 
                 File.WriteAllText(Path.Combine(path, prefix + final + ".bpw"), string.Join('\n', worldJoin!, 0, 6));
                 // End world file
