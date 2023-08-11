@@ -9,35 +9,19 @@ namespace SL3Reader
 {
     // We might need a refactoring. Seemingly it is not a single frame, but one long header,
     // and extra information panel and the data itself.
-    [StructLayout(LayoutKind.Explicit, Size = ExtendedSizeV10)]
+    [StructLayout(LayoutKind.Explicit, Size = ExtendedSizeV13)]
     [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
     public readonly struct Frame
     {
+        public const int BasicSize = 128;
         public const int ExtendedSizeV10 = 168;
         public const int ExtendedSizeV13 = 180;
-        public const int BasicSize = 128;
-        public const int MinimumInitSize = 44;
 
-        public const double KnotsToMPS = 1852d / 3600d;
-        public const double HalfPI = double.Pi / 2d;
-        public const double MillisecondsToSeconds = 1d / 1000d;
-
-        private const double PolarRadius = 6356752.3142d; // Lowrance uses float, causing truncated precision.
-        private const double RadToDeg = 360d / double.Tau;
-
-        private const double FootToMeter = .3048;
-        private const char FieldSeparator = ',';
-        private const string DebugFieldSeparator = "; ";
-
-        private const string DateTimeFormat = "yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'";
-
-        private static readonly CultureInfo invariantCulture = InvariantCulture;
-
-        #region Basic Properties
+        #region Basic Properties // BasicSize = 128
         [field: FieldOffset(0)] public readonly uint PositionOfFirstByte { get; } // (0)
-        [field: FieldOffset(4)] public readonly uint Version { get; } // (4) 
+        [field: FieldOffset(4)] public readonly FrameVersion Version { get; } // (4) 
         [field: FieldOffset(8)] public readonly ushort LengthOfFrame { get; } // (8)
-        [field: FieldOffset(10)] public readonly ushort PreviousFrameLength { get; } // (10)
+        [field: FieldOffset(10)] public readonly ushort LengthOfPreviousFrame { get; } // (10)
         [field: FieldOffset(12)] public readonly SurveyType SurveyType { get; } // (12)
         [field: FieldOffset(14)] public readonly short UnknownAt14 { get; } // (14) Always 0 for me.
         [field: FieldOffset(16)] public readonly uint CampaignID { get; } // (16)
@@ -76,66 +60,83 @@ namespace SL3Reader
         [field: FieldOffset(118)] public readonly ushort UnknownAt118 { get; } // (118)
         [field: FieldOffset(120)] public readonly uint UnknownAt120 { get; } // (120)
         [field: FieldOffset(124)] public readonly uint Milliseconds { get; } // (124)
+        #endregion Basic properties
 
-        // Derived:
+        #region Extended Properties for V10
+        [ContextStatic] private readonly static InvalidFrameTypeException invalidFrameTypeException = new();
+
+        [FieldOffset(128)] private readonly uint lastPrimaryScanFrameOffset;
+        public readonly uint LastPrimaryScanFrameOffset => FrameType is FrameType.Extended ? lastPrimaryScanFrameOffset : throw invalidFrameTypeException; // (128)
+        [FieldOffset(132)] private readonly uint lastSecondaryScanFrameOffset;
+        public readonly uint LastSecondaryScanFrameOffset => FrameType is FrameType.Extended ? lastSecondaryScanFrameOffset : throw invalidFrameTypeException;  // (132)
+        [FieldOffset(136)] public readonly uint lastDownScanFrameOffset;
+        public readonly uint LastDownScanFrameOffset => FrameType is FrameType.Extended ? lastDownScanFrameOffset : throw invalidFrameTypeException;  // (136)
+        [FieldOffset(140)] private readonly uint lastLeftSidescanFrameOffset;
+        public readonly uint LastLeftSidescanFrameOffset => FrameType is FrameType.Extended ? lastLeftSidescanFrameOffset : throw invalidFrameTypeException;  // (140)
+        [FieldOffset(144)] private readonly uint lastRightSidescanFrameOffset;
+        public readonly uint LastRightSidescanFrameOffset => FrameType is FrameType.Extended ? lastRightSidescanFrameOffset : throw invalidFrameTypeException;  // (144)
+
+        [FieldOffset(148)] private readonly uint lastSidescanFrameOffset;
+        public readonly uint LastSidescanFrameOffset => FrameType is FrameType.Extended ? lastSidescanFrameOffset : throw invalidFrameTypeException;  // (148)
+        [FieldOffset(152)] private readonly uint unknownAt152;
+        public readonly uint UnknownAt152 => FrameType is FrameType.Extended ? unknownAt152 : throw invalidFrameTypeException;  // (152)
+
+        [FieldOffset(156)] private readonly uint unknownAt156;
+        public readonly uint UnknownAt156 => FrameType is FrameType.Extended ? unknownAt156 : throw invalidFrameTypeException;  // (156)
+
+        [FieldOffset(160)] private readonly uint unknown160;
+        public readonly uint UnknownAt160 => FrameType is FrameType.Extended ? unknown160 : throw invalidFrameTypeException;  // (160)
+
+        [FieldOffset(164)] private readonly uint last3DFrameOffset;
+        public readonly uint Last3DFrameOffset => FrameType is FrameType.Extended ? last3DFrameOffset : throw invalidFrameTypeException;  // (164)
+        #endregion Extended properties for V10
+
+        #region Extended properties for V13
+        private readonly bool IsV13Extended
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining), SkipLocalsInit]
+            get => Version is FrameVersion.V13 &&
+                   FrameType is FrameType.Extended;
+        }
+
+        [FieldOffset(168)] private readonly uint unknownAt168;
+        public readonly uint UnknownAt168 => IsV13Extended ? unknownAt168 : throw invalidFrameTypeException;  // (168)
+        [FieldOffset(172)] private readonly uint unknownAt172;
+        public readonly uint UnknownAt172 => IsV13Extended ? unknownAt172 : throw invalidFrameTypeException;  // (172)
+        [FieldOffset(176)] private readonly uint unknownAt176;
+        public readonly uint UnknownAt176 => IsV13Extended ? unknownAt176 : throw invalidFrameTypeException;  // (176)
+        #endregion Extended properties for V13
+
+        #region Derived properties
+        public readonly FrameType FrameType
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining), SkipLocalsInit]
+            get => SurveyType is SurveyType.Unknown7 or SurveyType.Unknown8 ? FrameType.Basic : FrameType.Extended;
+        }
+
         /// <summary>
         /// Provides the data offset relatively to the begining of the frame.
         /// </summary>
-        public readonly int RelativeDataOffset
+        public readonly int HeaderSize
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => FrameType is FrameType.Extended
+            [MethodImpl(MethodImplOptions.AggressiveInlining), SkipLocalsInit]
+            get
+            {
+                return FrameType is FrameType.Extended
                     ? Version switch
                     {
-                        10 => ExtendedSizeV10,
-                        13 => ExtendedSizeV13,
-                        _ => throw new NotImplementedException("Unsupported frame type. Contact developer at GitHub!")
+                        FrameVersion.V10 => ExtendedSizeV10,
+                        FrameVersion.V13 => ExtendedSizeV13,
+                        _ => UnsuportedFrame()
+
                     }
                     : BasicSize;
+
+                static int UnsuportedFrame() => throw new NotImplementedException("Unsupported frame version. Contact developer at GitHub!");
+            }
         }
-        #endregion Basic properties
 
-        #region Type support
-        // Derived:
-        public readonly FrameType FrameType
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => SurveyType is SurveyType.Unknown7 or SurveyType.Unknown8 ? FrameType.Basic : FrameType.Extended;
-        }
-        #endregion Type support
-
-        #region Extended Properties
-        [FieldOffset(128)] private readonly uint lastPrimaryScanFrameOffset;
-        public readonly uint LastPrimaryScanFrameOffset => FrameType is FrameType.Extended ? lastPrimaryScanFrameOffset : throw new InvalidFrameTypeException(); // (128)
-
-        [FieldOffset(132)] private readonly uint lastSecondaryScanFrameOffset;
-        public readonly uint LastSecondaryScanFrameOffset => FrameType is FrameType.Extended ? lastSecondaryScanFrameOffset : throw new InvalidFrameTypeException();  // (132)
-        [FieldOffset(136)] public readonly uint lastDownScanFrameOffset;
-        public readonly uint LastDownScanFrameOffset => FrameType is FrameType.Extended ? lastDownScanFrameOffset : throw new InvalidFrameTypeException();  // (136)
-        [FieldOffset(140)] private readonly uint lastLeftSidescanFrameOffset;
-        public readonly uint LastLeftSidescanFrameOffset => FrameType is FrameType.Extended ? lastLeftSidescanFrameOffset : throw new InvalidFrameTypeException();  // (140)
-        [FieldOffset(144)] private readonly uint lastRightSidescanFrameOffset;
-        public readonly uint LastRightSidescanFrameOffset => FrameType is FrameType.Extended ? lastRightSidescanFrameOffset : throw new InvalidFrameTypeException();  // (144)
-
-        [FieldOffset(148)] private readonly uint lastSidescanFrameOffset;
-        public readonly uint LastSidescanFrameOffset => FrameType is FrameType.Extended ? lastSidescanFrameOffset : throw new InvalidFrameTypeException();  // (148)
-        [FieldOffset(152)] private readonly uint unknownAt152;
-        public readonly uint UnknownAt152 => FrameType is FrameType.Extended ? unknownAt152 : throw new InvalidFrameTypeException();  // (152)
-
-        [FieldOffset(156)] private readonly uint unknownAt156;
-        public readonly uint UnknownAt156 => FrameType is FrameType.Extended ? unknownAt156 : throw new InvalidFrameTypeException();  // (156)
-
-        [FieldOffset(160)] private readonly uint unknown160;
-        public readonly uint UnknownAt160 => FrameType is FrameType.Extended ? unknown160 : throw new InvalidFrameTypeException();  // (160)
-
-        [FieldOffset(164)] private readonly uint last3DFrameOffset;
-        public readonly uint Last3DFrameOffset => FrameType is FrameType.Extended ? last3DFrameOffset : throw new InvalidFrameTypeException();  // (164)
-
-        #endregion Extended properties
-
-        #region Extended v13 properties
-        // In version 13 the frame is bigger.
-        #endregion Extended v13 properties
+        #endregion Derived properties
 
         #region DateTime support
         private static DateTime timestampBase;
@@ -147,11 +148,18 @@ namespace SL3Reader
         #endregion
 
         #region WGS84
+        private const double RadToDeg = 360d / double.Tau;
+        private const double PolarRadius = 6356752.3142d; // Lowrance uses float, causing truncated precision.
         public readonly double Longitude => X / PolarRadius * RadToDeg;
         public readonly double Latitude => RadToDeg * double.Atan(double.Sinh(Y / PolarRadius));
         #endregion WGS84
 
         #region String generation
+        private const char FieldSeparator = ',';
+        private const string DebugFieldSeparator = "; ";
+        private const string DateTimeFormat = "yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'";
+
+        private static readonly CultureInfo invariantCulture = InvariantCulture;
         public readonly override string ToString()
         {
             CultureInfo invariantCulture = Frame.invariantCulture;
@@ -178,6 +186,7 @@ namespace SL3Reader
 
         public readonly ReadOnlySpan<char> Format(Span<char> buffer)
         {
+            CultureInfo invariantCulture = Frame.invariantCulture;
             CampaignID.TryFormat(buffer, out int pos, provider: invariantCulture);
             buffer[pos++] = ',';
             Timestamp.TryFormat(buffer[pos..], out int charWritten, DateTimeFormat, invariantCulture);
@@ -231,24 +240,33 @@ namespace SL3Reader
             return buffer[..pos];
         }
 
-        private readonly string GetDebuggerDisplay() =>
-            string.Join(DebugFieldSeparator, new string[5]
+        [SkipLocalsInit]
+        private readonly string GetDebuggerDisplay()
+        {
+            CultureInfo invariantCulture = Frame.invariantCulture;
+            return string.Join(DebugFieldSeparator, new string[6]
             {
                 SurveyType.ToString(),
                 WaterDepth.ToString(invariantCulture) + '′',
                 MinRange.ToString(invariantCulture),
                 MaxRange.ToString(invariantCulture),
-                FrameType.ToString()
+                FrameType.ToString(),
+                Version.ToString()
             });
+        }
         #endregion String generation
 
-        #region Unpack support
+        #region Coordinate augmentation support
+        private const double KnotsToMpS = 1852d / 3600d;
+        private const double HalfPI = double.Pi / 2d;
+        private const double MillisecondsToSeconds = 1d / 1000d;
+        private const double FootToMeter = 0.3048d;
         public readonly (double x, double y, double z, double v, double t, double d) QueryMetric() =>
                    (X, Y,
                     FootToMeter * GNSSAltitude,
-                    KnotsToMPS * GNSSSpeed,
+                    KnotsToMpS * GNSSSpeed,
                     MillisecondsToSeconds * Milliseconds,
                     Math.Tau - GNSSHeading + HalfPI);
-        #endregion Unpack support
-    };
+        #endregion Coordinate augmentation support
+    }
 };

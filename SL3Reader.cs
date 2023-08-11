@@ -9,6 +9,8 @@ using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.MemoryMappedFiles;
 using System.Collections.ObjectModel;
+using System.Text;
+using System.Buffers.Text;
 
 namespace SL3Reader
 {
@@ -35,21 +37,8 @@ namespace SL3Reader
             ArgumentException.ThrowIfNullOrWhiteSpace(path, nameof(path));
             long len = new FileInfo(path!).Length;
 
-            if (len < (SLFileHeader.Size + Frame.MinimumInitSize))
+            if (len < (SLFileHeader.Size + Frame.BasicSize))
                 throw new EndOfStreamException("The file is too short to be valid.");
-
-            memoryMappedFile = MemoryMappedFile.CreateFromFile(
-                File.OpenHandle(path!, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.RandomAccess, 0L),
-                null, len, MemoryMappedFileAccess.Read, HandleInheritability.None, false);
-            viewAccessor = memoryMappedFile.CreateViewAccessor(0, len, MemoryMappedFileAccess.Read);
-            viewHandle = viewAccessor.SafeMemoryMappedViewHandle;
-            byte* ptr = null;
-            viewHandle.AcquirePointer(ref ptr);
-
-            ((SLFileHeader*)ptr)->ThrowIfInvalidFormatDetected();
-            byte* maxPtr = ptr + len;
-
-            ptr += SLFileHeader.Size; // Advance for the first frame
 
             // Init Frames
             const long averageFrameSize = 2118L; // Empirically set value to avoid frequent resize of the underlying array.
@@ -74,9 +63,19 @@ namespace SL3Reader
             ReadOnlyCollectionBuilder<int> coordinate3DHelper = new(p10);
             ReadOnlyCollectionBuilder<int> coordinateSidescanHelper = new(p10);
 
-            // Init time
+            memoryMappedFile = MemoryMappedFile.CreateFromFile(
+                File.OpenHandle(path!, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.RandomAccess, 0L),
+                null, len, MemoryMappedFileAccess.Read, HandleInheritability.None, false);
+            viewAccessor = memoryMappedFile.CreateViewAccessor(0, len, MemoryMappedFileAccess.Read);
+            viewHandle = viewAccessor.SafeMemoryMappedViewHandle;
+            byte* ptr = null;
+            viewHandle.AcquirePointer(ref ptr);
+            byte* maxPtr = ptr + len;
+
+            ((SLFileHeader*)ptr)->ThrowIfInvalidFormatDetected();
+            ptr += SLFileHeader.Size; // Advance for the first frame
             Frame* currentFrame = (Frame*)ptr;
-            Frame.InitTimestampBase(currentFrame->HardwareTime);
+            Frame.InitTimestampBase(currentFrame->HardwareTime); // Init time
 
             // Load frames
             for (int i = 0;
@@ -154,7 +153,7 @@ namespace SL3Reader
             }.AsReadOnly();
 
             Coordinate3DHelper = coordinate3DHelper.ToReadOnlyCollection();
-
+            //ExamineUnknown8Datasets();
             return;
 
             // Local fuctions:
@@ -275,7 +274,7 @@ namespace SL3Reader
                     out Span<byte> fileBuffer,
                     out Span<byte> pixelData);
 
-                byte* offset = (byte*)((Frame*)imageFrames[0])->RelativeDataOffset;
+                byte* offset = (byte*)((Frame*)imageFrames[0])->HeaderSize;
 
                 fixed (byte* pixelPtr = pixelData)
                     for (int j = first, k = 0; j < final; j++)
@@ -366,19 +365,17 @@ namespace SL3Reader
             int unknown8FrameCount = unknown8Frames.Count;
             if (unknown8FrameCount < 1) return; // Return when no U8 exists
 
-            byte[] buffer = new byte[512];
-            fixed (byte* p = buffer)
+            for (int i = 0; i < unknown8FrameCount; i++)
             {
-                for (int i = 0; i < unknown8FrameCount - 1; i++)
+                
+                Frame* currentFrame = (Frame*)unknown8Frames[i];
+                byte* ptr = ((byte*)currentFrame)+currentFrame->HeaderSize;
+                for (int j = 0; j < 512; j += 2, ptr+=2)
                 {
-                    nuint ptr = unknown8Frames[i];
-                    Buffer.MemoryCopy((byte*)(ptr + (nuint)((Frame*)ptr)->RelativeDataOffset), p, 512, 512);
-                    for (int j = 0; j < 256; j += 2)
-                    {
-                        Debug.Print($"{buffer[j]}, {buffer[1 + j]}");
-                    }
+                    //Debug.Print((*(short*)ptr).ToString());
+                    if ((*(short*)ptr) is not 0)
+                        Debug.Print("M");
                 }
-
             }
         }
 
@@ -392,18 +389,28 @@ namespace SL3Reader
             ReadOnlyCollection<nuint> frames3D = IndexByType[SurveyType.ThreeDimensional];
             int frames3DLength = frames3D.Count;
             if (frames3DLength < 1) return;
+
             ReadOnlyCollection<GeoPoint> augmentedCoordinates = AugmentedCoordinates;
             ReadOnlyCollection<int> coordinate3DHelper = Coordinate3DHelper;
 
-            using StreamWriter streamWriter = File.CreateText(path!);
-            streamWriter.BaseStream.Write("CampaignID,DateTime,X[Lowrance_m],Y[Lowrance_m],Z[m_WGS84],Depth[m],Angle[°],Distance[m],Reliability\r\n"u8);
+            const int bufferSize = 16384;
+            using StreamWriter streamWriter = new(path!, Encoding.UTF8,
+                new FileStreamOptions()
+                {
+                    Access = FileAccess.Write,
+                    BufferSize = bufferSize,
+                    Mode = FileMode.OpenOrCreate,
+                    Options = FileOptions.SequentialScan
+                });
+            streamWriter.BaseStream.Write("CampaignID,DateTime,X[Lowrance_m],Y[Lowrance_m],Z[m_WGS84],Depth[m],Angle[°],Distance[m],Reliable\r\n"u8);
 
-            string[] stringArray = GC.AllocateUninitializedArray<string>(9);
+            string[] stringArray = new string[8];
+            StringBuilder stringBuilder = new(bufferSize);
 
             for (int i = 0; i < frames3DLength; i++)
             {
                 Frame* frame = (Frame*)frames3D[i];
-                ThreeDimensionalFrameHeader* header = (ThreeDimensionalFrameHeader*)((byte*)frame + frame->RelativeDataOffset);
+                ThreeDimensionalFrameHeader* header = (ThreeDimensionalFrameHeader*)((byte*)frame + frame->HeaderSize);
 
                 // TODO: Remove intermediate solution:
                 GeoPoint augmentedCoordinate = augmentedCoordinates[coordinate3DHelper[i]];
@@ -418,7 +425,6 @@ namespace SL3Reader
 
                 stringArray[0] = frame->CampaignID.ToString();
                 stringArray[1] = frame->Timestamp.ToString("yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'", invariantCulture);
-                stringArray[8] = "R";
 
                 // *************************** THIS IS TERRIBLE ***************************
                 // *************************** Refactor    ASAP ***************************
@@ -428,21 +434,17 @@ namespace SL3Reader
                     measurements += InterferometricMeasurement.Size)
                 {
                     InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
-                    double delta = measurement->Delta,
-                           depth = measurement->Depth;
-                    double distance = .3048 * double.Hypot(delta, depth);
-                    double angle = 90 - (360 / double.Tau) * double.Atan2(depth, delta);
-
-                    delta *= -.3048; // Negative side 
+                    double delta = -0.3048d * measurement->Delta, // Negative side
+                           depth = 0.3048d * measurement->Depth;
 
                     stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
                     stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
-                    stringArray[4] = double.FusedMultiplyAdd(-.3048, depth, centralZ).ToString(doubleFormat, invariantCulture);
-                    stringArray[5] = (.3048 * depth).ToString(doubleFormat, invariantCulture);
-                    stringArray[6] = angle.ToString(doubleFormat, invariantCulture);
-                    stringArray[7] = distance.ToString(doubleFormat, invariantCulture);
+                    stringArray[4] = (centralZ - depth).ToString(doubleFormat, invariantCulture);
+                    stringArray[5] = depth.ToString(doubleFormat, invariantCulture);
+                    stringArray[6] = measurement->AngleInDegrees.ToString(doubleFormat, invariantCulture);
+                    stringArray[7] = measurement->MetricDistance.ToString(doubleFormat, invariantCulture);
 
-                    streamWriter.WriteLine(string.Join(',', stringArray));
+                    stringBuilder.AppendJoin(',', stringArray).AppendLine(",Y");
                 }
 
                 // Right side
@@ -451,46 +453,39 @@ namespace SL3Reader
                     measurements += InterferometricMeasurement.Size)
                 {
                     InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
-                    double delta = measurement->Delta,
-                           depth = measurement->Depth;
-                    double distance = .3048 * double.Hypot(delta, depth);
-                    double angle = 90 - (360 / double.Tau) * double.Atan2(depth, delta);
-
-                    delta *= .3048; // Positive side 
+                    double delta = .3048d * measurement->Delta, // Positive side 
+                           depth = .3048d * measurement->Depth;
 
                     stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
                     stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
-                    stringArray[4] = double.FusedMultiplyAdd(-.3048, depth, centralZ).ToString(doubleFormat, invariantCulture);
-                    stringArray[5] = (.3048 * depth).ToString(doubleFormat, invariantCulture);
-                    stringArray[6] = angle.ToString(doubleFormat, invariantCulture);
-                    stringArray[7] = distance.ToString(doubleFormat, invariantCulture);
+                    stringArray[4] = (centralZ - depth).ToString(doubleFormat, invariantCulture);
+                    stringArray[5] = depth.ToString(doubleFormat, invariantCulture);
+                    stringArray[6] = measurement->AngleInDegrees.ToString(doubleFormat, invariantCulture);
+                    stringArray[7] = measurement->MetricDistance.ToString(doubleFormat, invariantCulture);
 
-                    streamWriter.WriteLine(string.Join(',', stringArray));
+                    stringBuilder.AppendJoin(',', stringArray).AppendLine(",Y");
                 }
 
                 if (includeUnreliable)
                 {
-                    stringArray[8] = "U";
                     for (byte* limit = measurements + header->NumberOfUnreliableLeftBytes;
                         measurements < limit;
                         measurements += InterferometricMeasurement.Size)
                     {
                         InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
-                        if (IsValidMeasurement(measurement, out double delta, out double depth))
+                        if (measurement->IsValid)
                         {
-                            double distance = .3048 * double.Hypot(delta, depth);
-                            double angle = 90 - (360 / double.Tau) * double.Atan2(depth, delta);
-
-                            delta *= -.3048; // Negative side 
+                            double delta = -0.3048d * measurement->Delta, // Negative side
+                                   depth = 0.3048d * measurement->Depth;
 
                             stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
                             stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
-                            stringArray[4] = double.FusedMultiplyAdd(-.3048, depth, centralZ).ToString(doubleFormat, invariantCulture);
-                            stringArray[5] = (.3048 * depth).ToString(doubleFormat, invariantCulture);
-                            stringArray[6] = angle.ToString(doubleFormat, invariantCulture);
-                            stringArray[7] = distance.ToString(doubleFormat, invariantCulture);
+                            stringArray[4] = (centralZ - depth).ToString(doubleFormat, invariantCulture);
+                            stringArray[5] = depth.ToString(doubleFormat, invariantCulture);
+                            stringArray[6] = measurement->AngleInDegrees.ToString(doubleFormat, invariantCulture);
+                            stringArray[7] = measurement->MetricDistance.ToString(doubleFormat, invariantCulture);
 
-                            streamWriter.WriteLine(string.Join(',', stringArray));
+                            stringBuilder.AppendJoin(',', stringArray).AppendLine(",N");
                         }
                     }
 
@@ -499,34 +494,24 @@ namespace SL3Reader
                         measurements += InterferometricMeasurement.Size)
                     {
                         InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
-                        if (IsValidMeasurement(measurement, out double delta, out double depth))
+                        if (measurement->IsValid)
                         {
-                            double distance = .3048 * double.Hypot(delta, depth);
-                            double angle = 90 - (360 / double.Tau) * double.Atan2(depth, delta);
-
-                            delta *= .3048; // Positive side 
+                            double delta = 0.3048d * measurement->Delta, // Positive side
+                                   depth = 0.3048d * measurement->Depth;
 
                             stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
                             stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
-                            stringArray[4] = double.FusedMultiplyAdd(-.3048, depth, centralZ).ToString(doubleFormat, invariantCulture);
-                            stringArray[5] = (.3048 * depth).ToString(doubleFormat, invariantCulture);
-                            stringArray[6] = angle.ToString(doubleFormat, invariantCulture);
-                            stringArray[7] = distance.ToString(doubleFormat, invariantCulture);
+                            stringArray[4] = (centralZ - depth).ToString(doubleFormat, invariantCulture);
+                            stringArray[5] = depth.ToString(doubleFormat, invariantCulture);
+                            stringArray[6] = measurement->AngleInDegrees.ToString(doubleFormat, invariantCulture);
+                            stringArray[7] = measurement->MetricDistance.ToString(doubleFormat, invariantCulture);
 
-                            streamWriter.WriteLine(string.Join(',', stringArray));
+                            stringBuilder.AppendJoin(',', stringArray).AppendLine(",N");
                         }
                     }
                 }
-            }
-
-            return;
-
-            [SkipLocalsInit]
-            static bool IsValidMeasurement(InterferometricMeasurement* measurement, out double delta, out double depth)
-            {
-                delta = measurement->Delta;
-                depth = measurement->Depth;
-                return delta is not < 0.001 and not > 5000.0 && depth is not < 1 and not > 600.0;
+                streamWriter.Write(stringBuilder);
+                stringBuilder.Clear();
             }
         }
 
@@ -537,7 +522,7 @@ namespace SL3Reader
             ReadOnlySpan<byte> fileBuffer = "<PAMDataset>\n  <Metadata>\n    <MDI key=\"DataType\">Processed</MDI>\n    <MDI key=\"SensorName\">Lowrance StructureScan3D</MDI>\n  </Metadata>\n  <PAMRasterBand band=\"1\">\n    <Histograms>\n      <HistItem>\n        <HistMin>-0.5</HistMin>\n        <HistMax>168.5</HistMax>\n        <BucketCount>169</BucketCount>\n        <IncludeOutOfRange>1</IncludeOutOfRange>\n        <Approximate>1</Approximate>\n        <HistCounts>194107|13838|0|0|0|0|0|0|0|0|13204|0|0|0|0|0|0|0|0|0|12328|0|0|0|11492|0|0|10383|0|0|0|9912|0|0|4621|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|4391|0|0|0|8479|0|0|7695|0|0|0|7038|0|0|6490|5879|5554|5039|4656|4477|4055|3763|3511|3250|3025|2814|2592|2443|2320|2267|1980|1861|3424|3258|2877|2640|2440|2289|2162|2879|1758|1709|1500|1480|1446|1320|2954|2051|1884|1743|1506|1425|1265|1123|1017|909|838|775|729|641|1114|938|852|731|632|547|495|441|427|364|363|317|306|292|255|361|509|315|314|314|360|252|241|204|293|178|206|185|262|294|175|271|217|139|212|182|126|155|160|80|124|1993|85|145|208|157|184|190|129|170|104|84|117|157|381|334|658|1195</HistCounts>\n      </HistItem>\n    </Histograms>\n    <Metadata>\n      <MDI key=\"STATISTICS_COVARIANCES\">1748.548089737012</MDI>\n      <MDI key=\"STATISTICS_MAXIMUM\">255</MDI>\n      <MDI key=\"STATISTICS_MEAN\">128</MDI>\n      <MDI key=\"STATISTICS_MEDIAN\">128</MDI>\n      <MDI key=\"STATISTICS_MINIMUM\">0</MDI>\n      <MDI key=\"STATISTICS_SKIPFACTORX\">1</MDI>\n      <MDI key=\"STATISTICS_SKIPFACTORY\">1</MDI>\n      <MDI key=\"STATISTICS_STDDEV\">16</MDI>\n    </Metadata>\n  </PAMRasterBand>\n</PAMDataset>"u8;
             using SafeFileHandle handle = File.OpenHandle(Path.ChangeExtension(originalPath, ".bmp.aux.xml"),
             FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.SequentialScan, fileBuffer.Length);
-            RandomAccess.Write(handle, fileBuffer, 0);
+            RandomAccess.Write(handle, fileBuffer, 0L);
             handle.Close();
         }
         #endregion
@@ -549,7 +534,7 @@ namespace SL3Reader
             using SafeFileHandle handle = File.OpenHandle(Path.ChangeExtension(originalPath, ".prj"),
             FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.SequentialScan, 805);
             RandomAccess.Write(handle,
-                "PROJCS[\"Lowrance_Mercator\",GEOGCS[\"Lowrance_Sphere\",DATUM[\"D_Lowrance_Sphere\",SPHEROID[\"Lowrance_Sphere\",6356752.31424518,0.0]],PRIMEM[\"Greenwich\",0.0,AUTHORITY[\"EPSG\",8901]],UNIT[\"Degree\",0.0174532925199433,AUTHORITY[\"EPSG\",9102]]],PROJECTION[\"Mercator\",AUTHORITY[\"Esri\",43004]],PARAMETER[\"False_Easting\",0.0,AUTHORITY[\"Esri\",100001]],PARAMETER[\"False_Northing\",0.0,AUTHORITY[\"Esri\",100002]],PARAMETER[\"Central_Meridian\",0.0,AUTHORITY[\"Esri\",100010]],PARAMETER[\"Standard_Parallel_1\",0.0,AUTHORITY[\"Esri\",100025]],UNIT[\"Meter\",1.0,AUTHORITY[\"EPSG\",9001]]],VERTCS[\"WGS_1984_Geoid\",VDATUM[\"WGS_1984_Geoid\",AUTHORITY[\"Esri\",105100]],PARAMETER[\"Vertical_Shift\",0.0,AUTHORITY[\"Esri\",100006]],PARAMETER[\"Direction\",1.0,AUTHORITY[\"Esri\",100007]],UNIT[\"Meter\",1.0,AUTHORITY[\"EPSG\",9001]],AUTHORITY[\"Esri\",105700]]"u8, 
+                "PROJCS[\"Lowrance_Mercator\",GEOGCS[\"Lowrance_Sphere\",DATUM[\"D_Lowrance_Sphere\",SPHEROID[\"Lowrance_Sphere\",6356752.31424518,0.0]],PRIMEM[\"Greenwich\",0.0,AUTHORITY[\"EPSG\",8901]],UNIT[\"Degree\",0.0174532925199433,AUTHORITY[\"EPSG\",9102]]],PROJECTION[\"Mercator\",AUTHORITY[\"Esri\",43004]],PARAMETER[\"False_Easting\",0.0,AUTHORITY[\"Esri\",100001]],PARAMETER[\"False_Northing\",0.0,AUTHORITY[\"Esri\",100002]],PARAMETER[\"Central_Meridian\",0.0,AUTHORITY[\"Esri\",100010]],PARAMETER[\"Standard_Parallel_1\",0.0,AUTHORITY[\"Esri\",100025]],UNIT[\"Meter\",1.0,AUTHORITY[\"EPSG\",9001]]],VERTCS[\"WGS_1984_Geoid\",VDATUM[\"WGS_1984_Geoid\",AUTHORITY[\"Esri\",105100]],PARAMETER[\"Vertical_Shift\",0.0,AUTHORITY[\"Esri\",100006]],PARAMETER[\"Direction\",1.0,AUTHORITY[\"Esri\",100007]],UNIT[\"Meter\",1.0,AUTHORITY[\"EPSG\",9001]],AUTHORITY[\"Esri\",105700]]"u8,
                 0);
             handle.Close();
         }

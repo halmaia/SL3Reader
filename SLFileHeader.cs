@@ -1,5 +1,4 @@
 ﻿using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -8,7 +7,7 @@ namespace SL3Reader
 {
     [StructLayout(LayoutKind.Sequential, Size = Size)]
     [DebuggerDisplay($"{{{nameof(ToString)}(),nq}}")]
-    public readonly ref struct SLFileHeader
+    internal readonly ref struct SLFileHeader
     {
         public const int Size = 8;
 
@@ -23,11 +22,11 @@ namespace SL3Reader
         public readonly override string ToString() =>
             FileFormat.ToString() + " (" + BlockSize.ToString() + ')';
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining), SkipLocalsInit]
         public readonly void ThrowIfInvalidFormatDetected()
         {
             if (FileFormat is not LogFileFormat.SL3)
                 throw new InvalidDataException("Unsupported file type. Expected type SL3.");
         }
-    }
+    };
 }
