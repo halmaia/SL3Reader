@@ -205,11 +205,11 @@ namespace SL3Reader
                     else
                     {
                         double dy = y0 - y1;
-                        if (double.Abs(dy) > 50) // Detect seriuos errors.
+                        if (double.Abs(dy) > 50) // Detect serious errors.
                             y0 = frame->Y;
 
                         double dx = x0 - x1;
-                        if (double.Abs(dx) > 50) // Detect seriuos errors.
+                        if (double.Abs(dx) > 50) // Detect serious errors.
                             x0 = frame->X;
                     }
 
