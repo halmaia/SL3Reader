@@ -50,15 +50,15 @@ namespace SL3Reader
             ReadOnlyCollectionBuilder<nuint> Primary = new(p8),
                                              Secondary = new(p8),
                                              DownScan = new(p10),
-                                             LeftSidescan = new(),
-                                             RightSidescan = new(),
+                                             LeftSidescan = [],
+                                             RightSidescan = [],
                                              SideScan = new(p10),
-                                             Unknown6 = new(),
+                                             Unknown6 = [],
                                              Unknown7 = new(p4),
                                              Unknown8 = new(p4),
                                              ThreeDimensional = new(p10),
-                                             DebugDigital = new(),
-                                             DebugNoise = new();
+                                             DebugDigital = [],
+                                             DebugNoise = [];
 
             ReadOnlyCollectionBuilder<int> coordinate3DHelper = new(estimatedCount / 10);
             ReadOnlyCollectionBuilder<int> coordinate3DHelper = new(p10);
@@ -206,11 +206,11 @@ namespace SL3Reader
                     else
                     {
                         double dy = y0 - y1;
-                        if (double.Abs(dy) > 50) // Detect seriuos errors.
+                        if (double.Abs(dy) > 50) // Detect serious errors.
                             y0 = frame->Y;
 
                         double dx = x0 - x1;
-                        if (double.Abs(dx) > 50) // Detect seriuos errors.
+                        if (double.Abs(dx) > 50) // Detect serious errors.
                             x0 = frame->X;
                     }
 
@@ -266,7 +266,7 @@ namespace SL3Reader
             List<int> breakpoints = GetBreakPoints(imageFrames, out int maxHeight);
             int numberOfColumns = (int)((Frame*)imageFrames[0])->LengthOfEchoData;
             byte[] buffer = BitmapHelper.CreateBuffer(maxHeight, numberOfColumns);
-            string[] worldJoin = new string[6] { "0", "", "", "0", "", "" };
+            string[] worldJoin = ["0", "", "", "0", "", ""];
 
             for (int i = 0, maxIndex = breakpoints.Count - 1; i < maxIndex; i++)
             {

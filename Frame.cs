@@ -127,12 +127,12 @@ namespace SL3Reader
                     {
                         FrameVersion.V10 => ExtendedSizeV10,
                         FrameVersion.V13 => ExtendedSizeV13,
-                        _ => UnsuportedFrame()
+                        _ => UnsupportedFrame()
 
                     }
                     : BasicSize;
 
-                static int UnsuportedFrame() => throw new NotImplementedException("Unsupported frame version. Contact developer at GitHub!");
+                static int UnsupportedFrame() => throw new NotImplementedException("Unsupported frame version. Contact developer at GitHub!");
             }
         }
 
@@ -250,7 +250,8 @@ namespace SL3Reader
                 WaterDepth.ToString(invariantCulture) + '′',
                 MinRange.ToString(invariantCulture),
                 MaxRange.ToString(invariantCulture),
-                FrameType.ToString()
+                FrameType.ToString(),
+                Version.ToString()
             ]);
         }
         #endregion String generation
