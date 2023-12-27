@@ -60,6 +60,7 @@ namespace SL3Reader
                                              DebugDigital = [],
                                              DebugNoise = [];
 
+            ReadOnlyCollectionBuilder<int> coordinate3DHelper = new(estimatedCount / 10);
             ReadOnlyCollectionBuilder<int> coordinate3DHelper = new(p10);
             ReadOnlyCollectionBuilder<int> coordinateSidescanHelper = new(p10);
 
@@ -232,7 +233,7 @@ namespace SL3Reader
                     Share = FileShare.Read,
                     Options = FileOptions.SequentialScan,
                     PreallocationSize = 151 * count, // Empirical guess.
-                    BufferSize = 151 * count
+                    BufferSize = 65536
                 });
 
             textWriter.BaseStream.Write("CampaignID[#],DateTime[UTC],SurveyType,WaterDepth[Feet],Longitude[°WGS48],Latitude[°WGS84],GNSSAltitude[Feet_WGS84],GNSSHeading[rad_azimuth],GNSSSpeed[m/s],MagneticHeading[rad_azimuth],MinRange[Feet],MaxRange[Feet],WaterTemperature[°C],WaterSpeed[Feet],HardwareTime[ms],Frequency,Milliseconds[ms],AugmentedX[m],AugmentedY[m]"u8);
@@ -243,8 +244,10 @@ namespace SL3Reader
             ReadOnlyCollection<GeoPoint> augmentedCoordinates = AugmentedCoordinates;
 
             scoped Span<char> buffer = stackalloc char[256];
-            for (int i = 0; i != count; i++)
+            for (int i = 0; i != count;)
             {
+                textWriter.Write(((Frame*)frames[i])->Format(buffer));
+                textWriter.WriteLine(augmentedCoordinates[i++].Format(buffer));
                 textWriter.Write(((Frame*)frames[i])->Format(buffer));
                 textWriter.WriteLine(augmentedCoordinates[i].Format(buffer));
             }
@@ -294,6 +297,15 @@ namespace SL3Reader
                 GeoPoint lastStrip = AugmentedCoordinates[Frames.IndexOf(imageFrames[final - 1])];
                 Frame* lastFrame = (Frame*)imageFrames[final - 1];
 
+                double XSize = -(lastStrip.Distance - firstStrip.Distance) / (final - first - 1);
+                double YSize = -10 * lastFrame->MaxRange * .3048 / numberOfColumns;
+                string WorldString = string.Join("\r\n",
+                        ["0",
+                         YSize.ToString(InvariantCulture),
+                         XSize.ToString(InvariantCulture),
+                         "0",
+                         lastStrip.Distance.ToString(InvariantCulture),
+                         lastFrame->SurveyType is SurveyType.SideScan ? (-1400d * YSize).ToString(): "0"], 0, 6);
                 // TODO: Nem jó!
                 double XSize = -(lastStrip.Distance - firstStrip.Distance) / (final - first);
                 double YSize = -10d * lastFrame->MaxRange * .3048d / numberOfColumns;

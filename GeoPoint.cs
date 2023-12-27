@@ -9,7 +9,6 @@ namespace SL3Reader
         public readonly double Y { get; } = y;
         public readonly double Altitude { get; } = altitude;
         public readonly double Heading { get; } = heading;
-
         public readonly double Distance { get; } = distance;
 
         public override readonly string ToString()
