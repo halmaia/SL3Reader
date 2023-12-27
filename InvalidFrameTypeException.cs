@@ -2,5 +2,5 @@
 
 namespace SL3Reader
 {
-    public class InvalidFrameTypeException : IOException { }
+    public class InvalidFrameTypeException : IOException { };
 }

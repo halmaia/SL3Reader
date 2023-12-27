@@ -8,5 +8,5 @@
         BI_BITFIELDS = 3,
         BI_JPEG = 4,
         BI_PNG = 5
-    }
+    };
 }
