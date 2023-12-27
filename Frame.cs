@@ -127,12 +127,12 @@ namespace SL3Reader
                     {
                         FrameVersion.V10 => ExtendedSizeV10,
                         FrameVersion.V13 => ExtendedSizeV13,
-                        _ => UnsuportedFrame()
+                        _ => UnsupportedFrame()
 
                     }
                     : BasicSize;
 
-                static int UnsuportedFrame() => throw new NotImplementedException("Unsupported frame version. Contact developer at GitHub!");
+                static int UnsupportedFrame() => throw new NotImplementedException("Unsupported frame version. Contact developer at GitHub!");
             }
         }
 
@@ -163,8 +163,8 @@ namespace SL3Reader
         public readonly override string ToString()
         {
             CultureInfo invariantCulture = Frame.invariantCulture;
-            return string.Join(FieldSeparator, new string[17]
-        {
+            return string.Join(FieldSeparator,
+        [
             CampaignID.ToString(),
             Timestamp.ToString(DateTimeFormat, invariantCulture),
             SurveyType.ToString(),
@@ -181,7 +181,7 @@ namespace SL3Reader
             WaterSpeed.ToString("0.###", invariantCulture),
             HardwareTime.ToString(),
             Frequency.ToString(),
-            Milliseconds.ToString()});
+            Milliseconds.ToString()]);
         }
 
         public readonly ReadOnlySpan<char> Format(Span<char> buffer)
@@ -244,15 +244,15 @@ namespace SL3Reader
         private readonly string GetDebuggerDisplay()
         {
             CultureInfo invariantCulture = Frame.invariantCulture;
-            return string.Join(DebugFieldSeparator, new string[6]
-            {
+            return string.Join(DebugFieldSeparator,
+            [
                 SurveyType.ToString(),
                 WaterDepth.ToString(invariantCulture) + '′',
                 MinRange.ToString(invariantCulture),
                 MaxRange.ToString(invariantCulture),
                 FrameType.ToString(),
                 Version.ToString()
-            });
+            ]);
         }
         #endregion String generation
 
