@@ -181,7 +181,7 @@ namespace SL3Reader
                 ForegroundColor = ConsoleColor.Red;
                 WriteLine(message);
                 ForegroundColor = ConsoleColor.White;
-            }
+            };
         }
     }
 }
