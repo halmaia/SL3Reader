@@ -3,23 +3,14 @@ using System.Globalization;
 
 namespace SL3Reader
 {
-    public readonly struct GeoPoint
+    public readonly struct GeoPoint(double x, double y, double heading, double altitude, double distance)
     {
-        public GeoPoint(double x, double y, double heading, double altitude, double distance)
-        {
-            X = x;
-            Y = y;
-            Altitude = altitude;
-            Heading = heading;
-            Distance = distance;
-        }
+        public readonly double X { get; } = x;
+        public readonly double Y { get; } = y;
+        public readonly double Altitude { get; } = altitude;
+        public readonly double Heading { get; } = heading;
 
-        public readonly double X { get; }
-        public readonly double Y { get; }
-        public readonly double Altitude { get; }
-        public readonly double Heading { get; }
-
-        public readonly double Distance { get; }
+        public readonly double Distance { get; } = distance;
 
         public override readonly string ToString()
         {
