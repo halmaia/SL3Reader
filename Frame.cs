@@ -133,8 +133,8 @@ namespace SL3Reader
         public readonly override string ToString()
         {
             CultureInfo invariantCulture = Frame.invariantCulture;
-            return string.Join(FieldSeparator, new string[17]
-        {
+            return string.Join(FieldSeparator,
+        [
             CampaignID.ToString(),
             Timestamp.ToString(DateTimeFormat, invariantCulture),
             SurveyType.ToString(),
@@ -151,7 +151,7 @@ namespace SL3Reader
             WaterSpeed.ToString("0.###", invariantCulture),
             HardwareTime.ToString(),
             Frequency.ToString(),
-            Milliseconds.ToString()});
+            Milliseconds.ToString()]);
         }
 
         public readonly Span<char> Format(Span<char> buffer)
@@ -213,14 +213,14 @@ namespace SL3Reader
         private readonly string GetDebuggerDisplay()
         {
             CultureInfo invariantCulture = Frame.invariantCulture;
-            return string.Join(DebugFieldSeparator, new string[5]
-            {
+            return string.Join(DebugFieldSeparator,
+            [
                 SurveyType.ToString(),
                 WaterDepth.ToString(invariantCulture) + '′',
                 MinRange.ToString(invariantCulture),
                 MaxRange.ToString(invariantCulture),
                 FrameType.ToString()
-            });
+            ]);
         }
         #endregion String generation
 

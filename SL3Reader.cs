@@ -59,15 +59,15 @@ namespace SL3Reader
             ReadOnlyCollectionBuilder<nuint> Primary = new(estimatedCount / 8),
                                              Secondary = new(estimatedCount / 8),
                                              DownScan = new(estimatedCount / 10),
-                                             LeftSidescan = new(), // Usually empty
-                                             RightSidescan = new(),
+                                             LeftSidescan = [], // Usually empty
+                                             RightSidescan = [],
                                              SideScan = new(estimatedCount / 10),
-                                             Unknown6 = new(),
+                                             Unknown6 = [],
                                              Unknown7 = new(estimatedCount / 4),
                                              Unknown8 = new(estimatedCount / 4),
                                              ThreeDimensional = new(estimatedCount / 10),
-                                             DebugDigital = new(),
-                                             DebugNoise = new();
+                                             DebugDigital = [],
+                                             DebugNoise = [];
 
             ReadOnlyCollectionBuilder<int> coordinate3DHelper = new(estimatedCount / 10);
 
@@ -295,13 +295,12 @@ namespace SL3Reader
                 double XSize = -(lastStrip.Distance - firstStrip.Distance) / (final - first - 1);
                 double YSize = -10 * lastFrame->MaxRange * .3048 / numberOfColumns;
                 string WorldString = string.Join("\r\n",
-                        new string[6]
-                         {"0",
+                        ["0",
                          YSize.ToString(InvariantCulture),
                          XSize.ToString(InvariantCulture),
                          "0",
                          lastStrip.Distance.ToString(InvariantCulture),
-                         lastFrame->SurveyType is SurveyType.SideScan ? (-1400*YSize).ToString(): "0"}, 0, 6);
+                         lastFrame->SurveyType is SurveyType.SideScan ? (-1400d * YSize).ToString(): "0"], 0, 6);
 
                 File.WriteAllText(Path.Combine(path, prefix + final + ".bpw"), WorldString);
                 // End world file
