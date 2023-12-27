@@ -59,7 +59,7 @@ namespace SL3Reader
             ReadOnlyCollectionBuilder<nuint> Primary = new(estimatedCount / 8),
                                              Secondary = new(estimatedCount / 8),
                                              DownScan = new(estimatedCount / 10),
-                                             LeftSidescan = new(),
+                                             LeftSidescan = new(), // Usually empty
                                              RightSidescan = new(),
                                              SideScan = new(estimatedCount / 10),
                                              Unknown6 = new(),
@@ -70,7 +70,6 @@ namespace SL3Reader
                                              DebugNoise = new();
 
             ReadOnlyCollectionBuilder<int> coordinate3DHelper = new(estimatedCount / 10);
-            ReadOnlyCollectionBuilder<int> coordinateSidescanHelper = new(estimatedCount / 10);
 
             // Init time
             Frame* currentFrame = (Frame*)ptr;
@@ -229,7 +228,7 @@ namespace SL3Reader
                     Share = FileShare.Read,
                     Options = FileOptions.SequentialScan,
                     PreallocationSize = 151 * count, // Empirical guess.
-                    BufferSize = 151 * count
+                    BufferSize = 65536
                 });
 
             textWriter.BaseStream.Write("CampaignID[#],DateTime[UTC],SurveyType,WaterDepth[Feet],Longitude[°WGS48],Latitude[°WGS84],GNSSAltitude[Feet_WGS84Ellipsoid],GNSSHeading[rad_azimuth],GNSSSpeed[m/s],MagneticHeading[rad_azimuth],MinRange[Feet],MaxRange[Feet],WaterTemperature[°C],WaterSpeed[Feet],HardwareTime[ms],Frequency,Milliseconds[ms],AugmentedX[m],AugmentedY[m]"u8);
@@ -240,13 +239,12 @@ namespace SL3Reader
             ReadOnlyCollection<GeoPoint> augmentedCoordinates = AugmentedCoordinates;
 
             scoped Span<char> buffer = stackalloc char[256];
-            for (int i = 0; i != count; i++)
+            for (int i = 0; i != count;)
             {
-                textWriter.Write(((Frame*)frames[i])->TryFormat(buffer));
-                textWriter.WriteLine(augmentedCoordinates[i].TryFormat(buffer));
+                textWriter.Write(((Frame*)frames[i])->Format(buffer));
+                textWriter.WriteLine(augmentedCoordinates[i++].Format(buffer));
             }
             textWriter.Close();
-
         }
 
         public unsafe void ExportImagery(string path, SurveyType surveyType = SurveyType.SideScan)

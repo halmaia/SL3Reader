@@ -1,26 +1,15 @@
 ﻿using System;
 using System.Globalization;
-using System.Runtime.Serialization;
 
 namespace SL3Reader
 {
-    public readonly struct GeoPoint
+    public readonly struct GeoPoint(double x, double y, double heading, double altitude, double distance)
     {
-        public GeoPoint(double x, double y, double heading, double altitude, double distance)
-        {
-            X = x;
-            Y = y;
-            Altitude = altitude;
-            Heading = heading;
-            Distance = distance;
-        }
-
-        public readonly double X { get; }
-        public readonly double Y { get; }
-        public readonly double Altitude { get; }
-        public readonly double Heading { get; }
-
-        public readonly double Distance { get; }
+        public readonly double X { get; } = x;
+        public readonly double Y { get; } = y;
+        public readonly double Altitude { get; } = altitude;
+        public readonly double Heading { get; } = heading;
+        public readonly double Distance { get; } = distance;
 
         public override readonly string ToString()
         {
@@ -29,7 +18,7 @@ namespace SL3Reader
                    Y.ToString("0.###", invariantCulture);
         }
         private static readonly CultureInfo invariantCulture = CultureInfo.InvariantCulture;
-        public readonly Span<char> TryFormat(Span<char> buffer)
+        public readonly Span<char> Format(Span<char> buffer)
         {
             var invar = invariantCulture;
             X.TryFormat(buffer, out int pos, "0.###", invar);

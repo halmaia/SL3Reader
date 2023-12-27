@@ -4,10 +4,6 @@ using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using System.Globalization;
 using static System.Globalization.CultureInfo;
-using System.Buffers.Text;
-using System.Diagnostics.CodeAnalysis;
-using System.Text;
-using System.Buffers;
 
 namespace SL3Reader
 {
@@ -158,7 +154,7 @@ namespace SL3Reader
             Milliseconds.ToString()});
         }
 
-        public readonly Span<char> TryFormat(Span<char> buffer)
+        public readonly Span<char> Format(Span<char> buffer)
         {
             var invar = invariantCulture;
             CampaignID.TryFormat(buffer, out int pos, provider: invar);

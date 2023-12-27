@@ -9,7 +9,7 @@ namespace SL3Reader
     {
         public static void Main(string[] args)
         {
-            if (args!.Length is not 3) // Always non-null.
+            if (args!.Length < 3) // Always non-null.
             {
                 PrintUsage();
                 return;
