@@ -184,7 +184,6 @@ namespace SL3Reader
             Milliseconds.ToString()]);
         }
 
-        public readonly ReadOnlySpan<char> Format(Span<char> buffer)
         public readonly Span<char> Format(Span<char> buffer)
         {
             CultureInfo invariantCulture = Frame.invariantCulture;
