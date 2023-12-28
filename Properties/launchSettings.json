@@ -2,7 +2,7 @@
   "profiles": {
     "SL3Reader": {
       "commandName": "Project",
-      "commandLineArgs": "\"F:\\Sonar.sl3\"  F:\\trajectory.cs -route"
+      "commandLineArgs": "\"F:\\Sonar2.sl3\"  F:\\PS -ps"
     }
   }
 }

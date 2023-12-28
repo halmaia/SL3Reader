@@ -262,7 +262,6 @@ namespace SL3Reader
             List<int> breakpoints = GetBreakPoints(imageFrames, out int maxHeight);
             int numberOfColumns = (int)((Frame*)imageFrames[0])->LengthOfEchoData;
             byte[] buffer = BitmapHelper.CreateBuffer(maxHeight, numberOfColumns);
-            string[] worldJoin = ["0", "", "", "0", "", ""];
 
             for (int i = 0, maxIndex = breakpoints.Count - 1; i < maxIndex; i++)
             {
@@ -284,7 +283,7 @@ namespace SL3Reader
                 using SafeFileHandle handle = File.OpenHandle(filePath!,
                     FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.SequentialScan, fileBuffer.Length);
                 RandomAccess.Write(handle, fileBuffer, 0);
-                handle.Close();
+                handle.Dispose();
 
                 // World file
 
@@ -302,14 +301,8 @@ namespace SL3Reader
                          "0",
                          lastStrip.Distance.ToString(invariantCulture),
                          lastFrame->SurveyType is SurveyType.SideScan ? (-1400d * YSize).ToString(): "0"], 0, 6);
-                
-                // TODO: Nem jó!
-                worldJoin[1] = YSize.ToString(invariantCulture);
-                worldJoin[2] = XSize.ToString(invariantCulture);
-                worldJoin[4] = lastStrip.Distance.ToString(invariantCulture);
-                worldJoin[5] = lastFrame->SurveyType is SurveyType.SideScan ? (-1400d * YSize).ToString(invariantCulture) : "0";
 
-                File.WriteAllText(Path.Combine(path, prefix + final + ".bpw"), string.Join('\n', worldJoin!, 0, 6));
+                File.WriteAllText(Path.Combine(path, prefix + final + ".bpw"), WorldString);
                 // End world file
 
                 // AUX file
@@ -374,10 +367,10 @@ namespace SL3Reader
 
             for (int i = 0; i < unknown8FrameCount; i++)
             {
-                
+
                 Frame* currentFrame = (Frame*)unknown8Frames[i];
-                byte* ptr = ((byte*)currentFrame)+currentFrame->HeaderSize;
-                for (int j = 0; j < 512; j += 2, ptr+=2)
+                byte* ptr = ((byte*)currentFrame) + currentFrame->HeaderSize;
+                for (int j = 0; j < 512; j += 2, ptr += 2)
                 {
                     //Debug.Print((*(short*)ptr).ToString());
                     if ((*(short*)ptr) is not 0)
@@ -530,7 +523,6 @@ namespace SL3Reader
             using SafeFileHandle handle = File.OpenHandle(Path.ChangeExtension(originalPath, ".bmp.aux.xml"),
             FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.SequentialScan, fileBuffer.Length);
             RandomAccess.Write(handle, fileBuffer, 0L);
-            handle.Close();
         }
         #endregion
 
