@@ -136,7 +136,7 @@ namespace SL3Reader
             [SkipLocalsInit]
             static void PrintSummary([DisallowNull] SL3Reader sl3reader)
             {
-                ReadOnlyDictionary<SurveyType, ReadOnlyCollection<nuint>> indexByType = sl3reader.IndexByType;
+                ReadOnlyDictionary<SurveyType, ReadOnlyCollection<nuint>> indexByType = sl3reader.FrameByType;
                 ReadOnlyCollection<nuint> frames = sl3reader.Frames;
                 int len = frames.Count;
                 System.Globalization.CultureInfo invariantCulture = System.Globalization.CultureInfo.InvariantCulture;

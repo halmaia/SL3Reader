@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace SL3Reader
 {
@@ -13,6 +14,7 @@ namespace SL3Reader
     }
     public static class SurveyTypeTranslator
     {
+        [SkipLocalsInit]
         public static ReadOnlySpan<byte> ToSpan(SurveyType surveyType) => surveyType switch
         {
             SurveyType.Primary => "Primary"u8,

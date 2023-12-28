@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace SL3Reader
@@ -18,6 +19,7 @@ namespace SL3Reader
             return X.ToString("0.###", invariantCulture) + ',' +
                    Y.ToString("0.###", invariantCulture);
         }
+        [SkipLocalsInit]
         public readonly ReadOnlySpan<byte> Format(Span<byte> buffer, bool addNewLine = true)
         {
             CultureInfo invariantCulture = CultureInfo.InvariantCulture;

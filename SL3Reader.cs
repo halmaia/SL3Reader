@@ -21,7 +21,7 @@ namespace SL3Reader
         #region Public properties
         public ReadOnlyCollection<nuint> Frames { get; }
         public ReadOnlyCollection<GeoPoint> AugmentedCoordinates { get; }
-        public ReadOnlyDictionary<SurveyType, ReadOnlyCollection<nuint>> IndexByType { get; }
+        public ReadOnlyDictionary<SurveyType, ReadOnlyCollection<nuint>> FrameByType { get; }
         #endregion End Public properties
 
         #region Private variables
@@ -136,7 +136,7 @@ namespace SL3Reader
             Frames = frames.ToReadOnlyCollection();
 
             // Populate major index
-            IndexByType = new SortedDictionary<SurveyType, ReadOnlyCollection<nuint>>()
+            FrameByType = new SortedDictionary<SurveyType, ReadOnlyCollection<nuint>>()
             {
                 { SurveyType.Primary, Primary.ToReadOnlyCollection() },
                 { SurveyType.Secondary, Secondary.ToReadOnlyCollection() },
@@ -252,10 +252,10 @@ namespace SL3Reader
 
         public unsafe void ExportImagery(string path, SurveyType surveyType = SurveyType.SideScan)
         {
-            ArgumentNullException.ThrowIfNull(nameof(path));
-
-            ReadOnlyCollection<nuint> imageFrames = IndexByType[surveyType];
+            ReadOnlyCollection<nuint> imageFrames = FrameByType[surveyType];
             if (imageFrames.Count < 1) return; // Return when no imagery exists.
+
+            ArgumentNullException.ThrowIfNull(nameof(path));
 
             CultureInfo invariantCulture = CultureInfo.InvariantCulture;
 
@@ -290,6 +290,7 @@ namespace SL3Reader
                 // TODO: Remove intermediate solution:
                 GeoPoint firstStrip = AugmentedCoordinates[Frames.IndexOf(imageFrames[first])];
                 GeoPoint lastStrip = AugmentedCoordinates[Frames.IndexOf(imageFrames[final - 1])];
+
                 Frame* lastFrame = (Frame*)imageFrames[final - 1];
 
                 double XSize = -(lastStrip.Distance - firstStrip.Distance) / (final - first - 1);
@@ -361,7 +362,7 @@ namespace SL3Reader
 
         public unsafe void ExamineUnknown8Datasets()
         {
-            ReadOnlyCollection<nuint> unknown8Frames = IndexByType[SurveyType.Unknown8];
+            ReadOnlyCollection<nuint> unknown8Frames = FrameByType[SurveyType.Unknown8];
             int unknown8FrameCount = unknown8Frames.Count;
             if (unknown8FrameCount < 1) return; // Return when no U8 exists
 
@@ -386,7 +387,7 @@ namespace SL3Reader
             const string doubleFormat = "0.####";
             CultureInfo invariantCulture = CultureInfo.InvariantCulture;
 
-            ReadOnlyCollection<nuint> frames3D = IndexByType[SurveyType.ThreeDimensional];
+            ReadOnlyCollection<nuint> frames3D = FrameByType[SurveyType.ThreeDimensional];
             int frames3DLength = frames3D.Count;
             if (frames3DLength < 1) return;
 
@@ -412,7 +413,6 @@ namespace SL3Reader
                 Frame* frame = (Frame*)frames3D[i];
                 ThreeDimensionalFrameHeader* header = (ThreeDimensionalFrameHeader*)((byte*)frame + frame->HeaderSize);
 
-                // TODO: Remove intermediate solution:
                 GeoPoint augmentedCoordinate = augmentedCoordinates[coordinate3DHelper[i]];
                 byte* measurements = (byte*)header + ThreeDimensionalFrameHeader.Size;
 

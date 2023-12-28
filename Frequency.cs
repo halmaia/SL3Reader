@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
 namespace SL3Reader
 {
@@ -11,6 +12,7 @@ namespace SL3Reader
     }
     public static class FrequencyTranslator
     {
+        [SkipLocalsInit]
         public static ReadOnlySpan<byte> ToSpan(Frequency frequency) => frequency switch
         {
             Frequency.Fq_200kHz => "Fq_200kHz"u8,
