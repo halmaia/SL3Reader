@@ -157,7 +157,7 @@ namespace SL3Reader
                 {
                     unsafe
                     {
-                        WriteLine("\tBegining of the survey: " + ((Frame*)frames[0])->Timestamp.ToString("yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'", invariantCulture));
+                        WriteLine("\tBeginning of the survey: " + ((Frame*)frames[0])->Timestamp.ToString("yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'", invariantCulture));
                         WriteLine("\tEnd of the survey: " + ((Frame*)frames[len - 1])->Timestamp.ToString("yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'", invariantCulture));
                     }
                 }

@@ -157,7 +157,7 @@ namespace SL3Reader
             //ExamineUnknown8Datasets();
             return;
 
-            // Local fuctions:
+            // Local functions:
 
             static ReadOnlyCollection<GeoPoint> AugmentTrajectory(ReadOnlyCollectionBuilder<nuint> frames)
             {
