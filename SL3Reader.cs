@@ -60,7 +60,6 @@ namespace SL3Reader
                                              DebugDigital = [],
                                              DebugNoise = [];
 
-            ReadOnlyCollectionBuilder<int> coordinate3DHelper = new(estimatedCount / 10);
             ReadOnlyCollectionBuilder<int> coordinate3DHelper = new(p10);
             ReadOnlyCollectionBuilder<int> coordinateSidescanHelper = new(p10);
 
@@ -98,10 +97,10 @@ namespace SL3Reader
                     case SurveyType.DownScan:
                         DownScan.Add(current);
                         break;
-                    case SurveyType.LeftSidescan:
+                    case SurveyType.LeftSideScan:
                         LeftSidescan.Add(current);
                         break;
-                    case SurveyType.RightSidescan:
+                    case SurveyType.RightSideScan:
                         RightSidescan.Add(current);
                         break;
                     case SurveyType.SideScan:
@@ -142,8 +141,8 @@ namespace SL3Reader
                 { SurveyType.Primary, Primary.ToReadOnlyCollection() },
                 { SurveyType.Secondary, Secondary.ToReadOnlyCollection() },
                 { SurveyType.DownScan, DownScan.ToReadOnlyCollection() },
-                { SurveyType.LeftSidescan, LeftSidescan.ToReadOnlyCollection() },
-                { SurveyType. RightSidescan, RightSidescan.ToReadOnlyCollection() },
+                { SurveyType.LeftSideScan, LeftSidescan.ToReadOnlyCollection() },
+                { SurveyType. RightSideScan, RightSidescan.ToReadOnlyCollection() },
                 { SurveyType.SideScan, SideScan.ToReadOnlyCollection() },
                 { SurveyType.Unknown6, Unknown6.ToReadOnlyCollection() },
                 { SurveyType.Unknown7, Unknown7.ToReadOnlyCollection() },
@@ -225,7 +224,7 @@ namespace SL3Reader
         {
             ReadOnlyCollection<nuint> frames = Frames;
             int count = frames.Count;
-            using StreamWriter textWriter = new(path,
+            using FileStream textWriter = new(path,
                 new FileStreamOptions()
                 {
                     Access = FileAccess.Write,
@@ -236,22 +235,19 @@ namespace SL3Reader
                     BufferSize = 65536
                 });
 
-            textWriter.BaseStream.Write("CampaignID[#],DateTime[UTC],SurveyType,WaterDepth[Feet],Longitude[°WGS48],Latitude[°WGS84],GNSSAltitude[Feet_WGS84],GNSSHeading[rad_azimuth],GNSSSpeed[m/s],MagneticHeading[rad_azimuth],MinRange[Feet],MaxRange[Feet],WaterTemperature[°C],WaterSpeed[Feet],HardwareTime[ms],Frequency,Milliseconds[ms],AugmentedX[m],AugmentedY[m]"u8);
+            textWriter.Write("CampaignID[#],DateTime[UTC],SurveyType,WaterDepth[Feet],Longitude[°WGS48],Latitude[°WGS84],GNSSAltitude[Feet_WGS84],GNSSHeading[rad_azimuth],GNSSSpeed[m/s],MagneticHeading[rad_azimuth],MinRange[Feet],MaxRange[Feet],WaterTemperature[°C],WaterSpeed[Feet],HardwareTime[ms],Frequency,Milliseconds[ms],AugmentedX[m],AugmentedY[m]\r\n"u8);
 
             // TODO: Filter is not working!
             //ReadOnlyCollection<nuint> frames = filter is SurveyType.All ? Frames : IndexByType[filter];
 
             ReadOnlyCollection<GeoPoint> augmentedCoordinates = AugmentedCoordinates;
 
-            scoped Span<char> buffer = stackalloc char[256];
+            scoped Span<byte> buffer = stackalloc byte[256];
             for (int i = 0; i != count;)
             {
                 textWriter.Write(((Frame*)frames[i])->Format(buffer));
-                textWriter.WriteLine(augmentedCoordinates[i++].Format(buffer));
-                textWriter.Write(((Frame*)frames[i])->Format(buffer));
-                textWriter.WriteLine(augmentedCoordinates[i].Format(buffer));
+                textWriter.Write(augmentedCoordinates[i++].Format(buffer));
             }
-            textWriter.Close();
         }
 
         public unsafe void ExportImagery(string path, SurveyType surveyType = SurveyType.SideScan)
@@ -301,14 +297,13 @@ namespace SL3Reader
                 double YSize = -10 * lastFrame->MaxRange * .3048 / numberOfColumns;
                 string WorldString = string.Join("\r\n",
                         ["0",
-                         YSize.ToString(InvariantCulture),
-                         XSize.ToString(InvariantCulture),
+                         YSize.ToString(invariantCulture),
+                         XSize.ToString(invariantCulture),
                          "0",
-                         lastStrip.Distance.ToString(InvariantCulture),
+                         lastStrip.Distance.ToString(invariantCulture),
                          lastFrame->SurveyType is SurveyType.SideScan ? (-1400d * YSize).ToString(): "0"], 0, 6);
+                
                 // TODO: Nem jó!
-                double XSize = -(lastStrip.Distance - firstStrip.Distance) / (final - first);
-                double YSize = -10d * lastFrame->MaxRange * .3048d / numberOfColumns;
                 worldJoin[1] = YSize.ToString(invariantCulture);
                 worldJoin[2] = XSize.ToString(invariantCulture);
                 worldJoin[4] = lastStrip.Distance.ToString(invariantCulture);
@@ -561,7 +556,7 @@ namespace SL3Reader
                 if (disposing)
                 {
                     viewHandle.ReleasePointer();
-                    viewHandle.Close();
+                    viewHandle.Dispose();
                     viewAccessor.Dispose();
                     memoryMappedFile.Dispose();
                 }

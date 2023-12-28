@@ -146,8 +146,8 @@ namespace SL3Reader
 
                 WriteLine("\tNumber of primary frames: " + indexByType[SurveyType.Primary].Count.ToString("# ##0"));
                 WriteLine("\tNumber of secondary frames: " + indexByType[SurveyType.Secondary].Count.ToString("# ##0"));
-                WriteLine("\tNumber of left sidescan frames: " + indexByType[SurveyType.LeftSidescan].Count.ToString("# ##0"));
-                WriteLine("\tNumber of right sidescan frames: " + indexByType[SurveyType.RightSidescan].Count.ToString("# ##0"));
+                WriteLine("\tNumber of left sidescan frames: " + indexByType[SurveyType.LeftSideScan].Count.ToString("# ##0"));
+                WriteLine("\tNumber of right sidescan frames: " + indexByType[SurveyType.RightSideScan].Count.ToString("# ##0"));
                 WriteLine("\tNumber of sidescan frames: " + indexByType[SurveyType.SideScan].Count.ToString("# ##0"));
                 WriteLine("\tNumber of downscan frames: " + indexByType[SurveyType.DownScan].Count.ToString("# ##0"));
                 WriteLine("\tNumber of 3D frames: " + indexByType[SurveyType.ThreeDimensional].Count.ToString("# ##0"));

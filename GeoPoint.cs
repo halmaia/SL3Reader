@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Globalization;
+using System.Text;
 
 namespace SL3Reader
 {
@@ -17,14 +18,21 @@ namespace SL3Reader
             return X.ToString("0.###", invariantCulture) + ',' +
                    Y.ToString("0.###", invariantCulture);
         }
-        private static readonly CultureInfo invariantCulture = CultureInfo.InvariantCulture;
-        public readonly ReadOnlySpan<char> Format(Span<char> buffer)
+        public readonly ReadOnlySpan<byte> Format(Span<byte> buffer, bool addNewLine = true)
         {
-            var invar = invariantCulture;
-            X.TryFormat(buffer, out int pos, "0.###", invar);
-            buffer[pos++] = ',';
-            Y.TryFormat(buffer[pos..], out int charWritten, "0.###", invar);
-            return buffer[..(pos + charWritten)];
+            CultureInfo invariantCulture = CultureInfo.InvariantCulture;
+            ReadOnlySpan<char> format = "0.###";
+            X.TryFormat(buffer, out int pos, format, invariantCulture);
+            buffer[pos++] = 44; // ','u8; 
+            Y.TryFormat(buffer[pos..], out int charWritten, format, invariantCulture);
+            pos += charWritten;
+
+            if (addNewLine)
+            {
+                "\r\n"u8.CopyTo(buffer[pos..]);
+                pos += 2;
+            }
+            return buffer[..pos];
         }
     }
 }
