@@ -77,6 +77,8 @@ namespace SL3Reader
             Frame* currentFrame = (Frame*)ptr;
             Frame.InitTimestampBase(currentFrame->HardwareTime); // Init time
 
+            bool unknownFrameDetected = false;
+
             // Load frames
             for (int i = 0;
                 ptr < maxPtr && (ptr + currentFrame->LengthOfFrame) < maxPtr; // Use whole frames only!
@@ -125,8 +127,14 @@ namespace SL3Reader
                     case SurveyType.DebugNoise:
                         DebugNoise.Add(current);
                         break;
+                    default:
+                        unknownFrameDetected = true;
+                        break;
                 }
             }
+
+            if (unknownFrameDetected)
+                Console.WriteLine("Warning! Unknown frame type detected!\nContact the developer for further analysis.");
 
             // Init AugmentedCoordinates
             AugmentedCoordinates = frames.Count is 0 ?
