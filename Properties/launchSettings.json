@@ -2,7 +2,7 @@
   "profiles": {
     "SL3Reader": {
       "commandName": "Project",
-      "commandLineArgs": "F:\\FKM_170_174_L3.sl3  F:\\SS -ss"
+      "commandLineArgs": "F:\\FKM_170_174_L3.sl3  F:\\SSG -ssg0"
     }
   }
 }

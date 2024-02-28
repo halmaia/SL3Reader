@@ -258,7 +258,7 @@ namespace SL3Reader
             }
         }
 
-        public unsafe void ExportImagery(string path, SurveyType surveyType = SurveyType.SideScan)
+        public unsafe void ExportImagery(string path, SurveyType surveyType = SurveyType.SideScan, bool exportGeoreference = false)
         {
             ReadOnlyCollection<nuint> imageFrames = FrameByType[surveyType];
             if (imageFrames.Count < 1) return; // Return when no imagery exists.
@@ -301,21 +301,61 @@ namespace SL3Reader
 
                 Frame* lastFrame = (Frame*)imageFrames[final - 1];
 
-                double XSize = -(lastStrip.Distance - firstStrip.Distance) / (final - first - 1);
-                double YSize = -10 * lastFrame->MaxRange * .3048 / numberOfColumns;
-                string WorldString = string.Join("\r\n",
-                        ["0",
+                if (!exportGeoreference)
+                {
+                    double XSize = -(lastStrip.Distance - firstStrip.Distance) / (final - first - 1);
+                    double YSize = -10 * lastFrame->MaxRange * .3048 / numberOfColumns;
+                    string WorldString = string.Join("\r\n",
+                            ["0",
                          YSize.ToString(invariantCulture),
                          XSize.ToString(invariantCulture),
                          "0",
                          lastStrip.Distance.ToString(invariantCulture),
                          lastFrame->SurveyType is SurveyType.SideScan ? (-1400d * YSize).ToString(): "0"], 0, 6);
 
-                File.WriteAllText(Path.Combine(path, prefix + final + ".bpw"), WorldString);
+                    File.WriteAllText(Path.Combine(path, prefix + final + ".bpw"), WorldString);
+                }
                 // End world file
 
                 // AUX file
-                WriteAUXFile(filePath);
+                if (exportGeoreference)
+                {
+
+                    double delta = .3084 * lastFrame->MaxRange;
+
+                    List<GeoPoint> sourceGCPs = new((final-first)/10);
+                    List<GeoPoint> targetGCPs = new(sourceGCPs.Capacity);
+
+                    for (int s = first; s <= final - 1; s += 50)
+                    {
+
+                        sourceGCPs.Add(new(1400.5, -(s-first)+.5, default, default, default));
+                        sourceGCPs.Add(new(2799.5, -(s - first)+.5, default, default, default));
+                        sourceGCPs.Add(new(.5, -(s - first)+.5, default, default, default));
+
+                        GeoPoint Strip = AugmentedCoordinates[Frames.IndexOf(imageFrames[s])];
+                        Frame* frame = (Frame*)imageFrames[s];
+                        (double sin, double cos) =
+                        double.SinCos(frame->GNSSHeading - .5 * double.Pi);
+
+                        targetGCPs.AddRange([
+                        Strip,
+                        new(double.FusedMultiplyAdd(-delta, sin, Strip.X),
+                            double.FusedMultiplyAdd(-delta, cos, Strip.Y),
+                            0, 0, 0),
+                        new(double.FusedMultiplyAdd(delta, sin, Strip.X),
+                            double.FusedMultiplyAdd(delta, cos, Strip.Y),
+                            0, 0, 0)]);
+                    }
+
+
+
+                    GeoReferenceHelper.WriteGeoreferencedPAM(Path.ChangeExtension(filePath, ".bmp.aux.xml"),  sourceGCPs, targetGCPs);
+                }
+                else
+                {
+                    WriteAUXFile(filePath);
+                }
             }
 
             [SkipLocalsInit, MethodImpl(MethodImplOptions.AggressiveInlining)]

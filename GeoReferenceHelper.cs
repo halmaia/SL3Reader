@@ -1,12 +1,14 @@
 ﻿using System;
 using System.IO;
 using System.Buffers;
+using System.Globalization;
+using System.Collections.Generic;
 
 namespace SL3Reader
 {
-    public static class GeoReferenceHelper
+    internal static class GeoReferenceHelper
     {
-        public static void WriteGeoreferencedPAM(string path, Span<GeoPoint> sourceGCPs, Span<GeoPoint> targetGCPs)
+        internal static void WriteGeoreferencedPAM(string path, List<GeoPoint> sourceGCPs, List<GeoPoint> targetGCPs)
         {
             using FileStream file = File.OpenWrite(path);
             file.Write("""
@@ -34,21 +36,24 @@ namespace SL3Reader
                           <HighPrecision>true</HighPrecision>
                         </SpatialReference>
                         <SourceGCPs xsi:type="typens:ArrayOfDouble">
+
                 """u8);
+
+            CultureInfo invariantCulture = CultureInfo.InvariantCulture;
             ReadOnlySpan<byte> doubleOpen = "          <Double>"u8;
             ReadOnlySpan<byte> doubleClose = "</Double>\n"u8;
             byte[] buffer = ArrayPool<byte>.Shared.Rent(128);
             Span<byte> utf8Destination = buffer;
 
-            for (int i = 0; i < sourceGCPs.Length; i++)
+            for (int i = 0; i < sourceGCPs.Count; i++)
             {
                 file.Write(doubleOpen);
-                GeoPoint current = sourceGCPs[0];
-                current.X.TryFormat(utf8Destination, out int bytesWritten);
+                GeoPoint current = sourceGCPs[i];
+                current.X.TryFormat(utf8Destination, out int bytesWritten, provider: invariantCulture);
                 file.Write(utf8Destination[..bytesWritten]);
                 file.Write(doubleClose);
                 file.Write(doubleOpen);
-                current.Y.TryFormat(utf8Destination, out bytesWritten);
+                current.Y.TryFormat(utf8Destination, out bytesWritten, provider: invariantCulture);
                 file.Write(utf8Destination[..bytesWritten]);
                 file.Write(doubleClose);
             }
@@ -56,17 +61,18 @@ namespace SL3Reader
             file.Write("""
                         </SourceGCPs>
                         <TargetGCPs xsi:type="typens:ArrayOfDouble">
+
                 """u8);
 
-            for (int i = 0; i < targetGCPs.Length; i++)
+            for (int i = 0; i < targetGCPs.Count; i++)
             {
                 file.Write(doubleOpen);
-                GeoPoint current = targetGCPs[0];
-                current.X.TryFormat(utf8Destination, out int bytesWritten);
+                GeoPoint current = targetGCPs[i];
+                current.X.TryFormat(utf8Destination, out int bytesWritten, provider: invariantCulture);
                 file.Write(utf8Destination[..bytesWritten]);
                 file.Write(doubleClose);
                 file.Write(doubleOpen);
-                current.Y.TryFormat(utf8Destination, out bytesWritten);
+                current.Y.TryFormat(utf8Destination, out bytesWritten, provider: invariantCulture);
                 file.Write(utf8Destination[..bytesWritten]);
                 file.Write(doubleClose);
             }

@@ -72,6 +72,18 @@ namespace SL3Reader
                     sl3reader.ExportImagery(output!);
                     PrintGreen("Side scan imagery exported successfully.\n");
                     break;
+                case "-ssg0":
+                    sl3reader.ExportImagery(output!, SurveyType.SideScan, true);
+                    PrintGreen("Side scan imagery exported successfully.\n");
+                    break;
+                case "-ssg1":
+                    // sl3reader.ExportImagery(output!);
+                    PrintGreen("Do not use! Preserved for future compatibility!\n");
+                    break;
+                case "-ssg3":
+                    // sl3reader.ExportImagery(output!);
+                    PrintGreen("Do not use! Preserved for future compatibility!\n");
+                    break;
                 case "-ps":
                     sl3reader.ExportImagery(output!, SurveyType.Primary);
                     PrintGreen("Primary scan imagery exported successfully.\n");
