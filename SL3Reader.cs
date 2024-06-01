@@ -263,7 +263,7 @@ namespace SL3Reader
             ReadOnlyCollection<nuint> imageFrames = FrameByType[surveyType];
             if (imageFrames.Count < 1) return; // Return when no imagery exists.
 
-            ArgumentNullException.ThrowIfNull(nameof(path));
+            ArgumentNullException.ThrowIfNull(path);
 
             CultureInfo invariantCulture = CultureInfo.InvariantCulture;
 
@@ -430,7 +430,7 @@ namespace SL3Reader
 
         public unsafe void Export3D(string path, bool includeUnreliable = false, bool magneticHeading = false)
         {
-            ArgumentNullException.ThrowIfNull(nameof(path));
+            ArgumentNullException.ThrowIfNull(path);
 
             const string doubleFormat = "0.####";
             CultureInfo invariantCulture = CultureInfo.InvariantCulture;
