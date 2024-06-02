@@ -1,9 +1,8 @@
-﻿namespace SL3Reader
+﻿namespace SL3Reader;
+
+public enum LogFileFormat : short
 {
-    public enum LogFileFormat : short
-    {
-        SLG = 1,
-        SL2,
-        SL3
-    }
+    SLG = 1,
+    SL2,
+    SL3
 }

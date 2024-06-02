@@ -1,7 +1,6 @@
-﻿namespace SL3Reader
+﻿namespace SL3Reader;
+
+public enum FrameVersion : uint
 {
-    public enum FrameVersion:uint
-    {
-        V10 = 10u, V13 = 13u
-    }
-};
+    V10 = 10u, V13 = 13u
+}

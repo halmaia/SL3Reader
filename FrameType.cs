@@ -1,4 +1,3 @@
-﻿namespace SL3Reader {
-    public enum FrameType : byte
-    { Basic, Extended }
-}
+﻿namespace SL3Reader;
+public enum FrameType : byte
+{ Basic, Extended }
