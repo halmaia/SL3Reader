@@ -9,6 +9,8 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO.MemoryMappedFiles;
 using System.Collections.ObjectModel;
 using System.Text;
+using System.Runtime.InteropServices;
+using System.Text.Unicode;
 
 namespace SL3Reader;
 
@@ -321,15 +323,15 @@ public class SL3Reader : IDisposable
 
                 double delta = .3084 * lastFrame->MaxRange;
 
-                List<GeoPoint> sourceGCPs = new((final-first)/10);
+                List<GeoPoint> sourceGCPs = new((final - first) / 10);
                 List<GeoPoint> targetGCPs = new(sourceGCPs.Capacity);
 
                 for (int s = first; s <= final - 1; s += 50)
                 {
 
-                    sourceGCPs.Add(new(1400.5, -(s-first)+.5, default, default, default));
-                    sourceGCPs.Add(new(2799.5, -(s - first)+.5, default, default, default));
-                    sourceGCPs.Add(new(.5, -(s - first)+.5, default, default, default));
+                    sourceGCPs.Add(new(1400.5, -(s - first) + .5, default, default, default));
+                    sourceGCPs.Add(new(2799.5, -(s - first) + .5, default, default, default));
+                    sourceGCPs.Add(new(.5, -(s - first) + .5, default, default, default));
 
                     GeoPoint Strip = AugmentedCoordinates[Frames.IndexOf(imageFrames[s])];
                     Frame* frame = (Frame*)imageFrames[s];
@@ -348,7 +350,7 @@ public class SL3Reader : IDisposable
 
 
 
-                GeoReferenceHelper.WriteGeoreferencedPAM(Path.ChangeExtension(filePath, ".bmp.aux.xml"),  sourceGCPs, targetGCPs);
+                GeoReferenceHelper.WriteGeoreferencedPAM(Path.ChangeExtension(filePath, ".bmp.aux.xml"), sourceGCPs, targetGCPs);
             }
             else
             {
@@ -607,6 +609,75 @@ public class SL3Reader : IDisposable
         // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
         Dispose(disposing: true);
         GC.SuppressFinalize(this);
+    }
+
+    internal unsafe void ExportSS_Int_Pair(string outputFolder)
+    {
+        using var ssFile = File.OpenWrite(Path.Combine(outputFolder, "SS.txt"));
+        using var ifFile = File.OpenWrite(Path.Combine(outputFolder, "IF.txt"));
+        var SideScanFrames = FrameByType[SurveyType.SideScan];
+        var InterferometricFrames = FrameByType[SurveyType.ThreeDimensional];
+        var ssStringBuilder = new StringBuilder(2800 * 4 + 2 + 2800 * 19);
+        var ifStringBuilder = new StringBuilder(2800 * 2 * 19);
+        int n = 0;
+        foreach (nuint ss in SideScanFrames)
+        {
+            ref readonly Frame ssFrame = ref Unsafe.AsRef<Frame>((void*)ss);
+            ref Frame ifFrame = ref Unsafe.AsRef<Frame>((void*)InterferometricFrames[n]);
+            var ssStride = (ssFrame.MaxRange / 2800d) * (.3048 * 100);
+            var ssHalfStep = .5 * ssStride;
+
+            ReadOnlySpan<byte> ssBytes = new(Unsafe.Add<byte>((void*)ss, ssFrame.HeaderSize), 2800);
+            int i = -1399; bool left = true;
+            foreach (byte item in ssBytes)
+            {
+                ssStringBuilder.Append(double.FusedMultiplyAdd(i, ssStride, ssHalfStep)).Append(' ').Append(item).Append(' ');
+                if (left && i == 0)
+                { left = false; }
+                else i++;
+            }
+            ssStringBuilder.AppendLine();
+            ssFile.Write(Encoding.UTF8.GetBytes(ssStringBuilder.ToString()));
+            ssStringBuilder.Clear();
+
+            ref ThreeDimensionalFrameHeader frame3DHeader = ref Unsafe.AsRef<ThreeDimensionalFrameHeader>
+                (Unsafe.Add<byte>(Unsafe.AsPointer<Frame>(ref ifFrame), ifFrame.HeaderSize));
+
+            Span<float> leftMeasurements = new(Unsafe.Add<byte>( Unsafe.AsPointer(ref frame3DHeader),frame3DHeader.HeaderSize), frame3DHeader.NumberOfLeftBytes / 4);
+            Span<float> rightMeasurements = new(Unsafe.Add<byte>(Unsafe.AsPointer(ref frame3DHeader), frame3DHeader.HeaderSize+ frame3DHeader.NumberOfLeftBytes), frame3DHeader.NumberOfRightBytes / 4);
+            Span<(float x, float y)> leftPairs =   MemoryMarshal.Cast<float, (float x, float y)>(leftMeasurements).ToArray().AsSpan();
+            Span<(float x, float y)> rightPairs = MemoryMarshal.Cast<float, (float x, float y)>(rightMeasurements);
+
+            MemoryExtensions.Reverse(leftPairs);
+
+            for (int k = 0; k < 1400-leftPairs.Length; k++)
+            {
+                ifStringBuilder.Append("-9999 -9999 ");
+            }
+
+            for (int k = 0; k < leftPairs.Length; k++)
+            {
+                ifStringBuilder.Append(leftPairs[k].x * (-.3048 * 100)).Append(' ').
+                    Append(leftPairs[k].y * (.3048 * 100)).Append(' ');
+            }
+
+            for (int k = 0; k < rightPairs.Length; k++)
+            {
+                ifStringBuilder.Append(rightPairs[k].x * (.3048 * 100)).Append(' ').
+                    Append(rightPairs[k].y * (.3048 * 100)).Append(' ');
+            }
+
+            for (int k = 0; k < 1400 - rightPairs.Length; k++)
+            {
+                ifStringBuilder.Append("-9999 -9999 ");
+            }
+
+            ifStringBuilder.AppendLine();
+            ifFile.Write(Encoding.UTF8.GetBytes(ifStringBuilder.ToString()));
+            ifStringBuilder.Clear();
+            n++;
+        }
+
     }
     #endregion Dispose Pattern
 };

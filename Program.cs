@@ -100,6 +100,10 @@ public static class Program
                 sl3reader.ExportImagery(output!, SurveyType.Unknown7);
                 PrintGreen("Frame type №7 imagery exported successfully.\n");
                 break;
+            case "-exp":
+                sl3reader.ExportSS_Int_Pair(output!);
+                PrintGreen("Experimental output generated successfully.\n");
+                break;
             default:
                 WriteLine("Invalid argument (" + expSelector + ").");
                 PrintUsage();

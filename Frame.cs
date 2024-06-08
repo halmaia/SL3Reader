@@ -148,10 +148,10 @@ public readonly struct Frame
     #endregion
 
     #region WGS84
-    
+
     private const double PolarRadius = 6356752.3142d; // Lowrance uses float, causing truncated precision.
-    public readonly double Longitude => double.RadiansToDegrees( X / PolarRadius);
-    public readonly double Latitude => double.RadiansToDegrees( double.Atan(double.Sinh(Y / PolarRadius)));
+    public readonly double Longitude => double.RadiansToDegrees(X / PolarRadius);
+    public readonly double Latitude => double.RadiansToDegrees(double.Atan(double.Sinh(Y / PolarRadius)));
     #endregion WGS84
 
     #region String generation
@@ -164,8 +164,7 @@ public readonly struct Frame
     {
         CultureInfo invariantCulture = Frame.invariantCulture;
         return string.Join(FieldSeparator,
-    [
-        CampaignID.ToString(),
+    new string[]       {CampaignID.ToString(),
         Timestamp.ToString(DateTimeFormat, invariantCulture),
         SurveyType.ToString(),
         WaterDepth.ToString("0.###", invariantCulture),
@@ -181,7 +180,7 @@ public readonly struct Frame
         WaterSpeed.ToString("0.###", invariantCulture),
         HardwareTime.ToString(),
         Frequency.ToString(),
-        Milliseconds.ToString()]);
+        Milliseconds.ToString()});
     }
 
     [SkipLocalsInit]
@@ -250,14 +249,14 @@ public readonly struct Frame
     {
         CultureInfo invariantCulture = Frame.invariantCulture;
         return string.Join(DebugFieldSeparator,
-        [
+        new string[] {
             SurveyType.ToString(),
             WaterDepth.ToString(invariantCulture) + '′',
             MinRange.ToString(invariantCulture),
             MaxRange.ToString(invariantCulture),
             FrameType.ToString(),
             Version.ToString()
-        ]);
+        });
     }
     #endregion String generation
 
