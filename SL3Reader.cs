@@ -348,8 +348,6 @@ public class SL3Reader : IDisposable
                         0, 0, 0)]);
                 }
 
-
-
                 GeoReferenceHelper.WriteGeoreferencedPAM(Path.ChangeExtension(filePath, ".bmp.aux.xml"), sourceGCPs, targetGCPs);
             }
             else
@@ -374,10 +372,10 @@ public class SL3Reader : IDisposable
         static unsafe List<int> GetBreakPoints(ReadOnlyCollection<nuint> framesToCheck, out int contiguousLength)
         {
             int frameCount = framesToCheck.Count;
-            float previousRange = ((Frame*)framesToCheck[0])->MaxRange;
-
             List<int> breakpoints = new(frameCount / 300) { 0 }; // ~300 empirical guess. 
                                                                  // 'i' have to be incremented to prevent double test.
+
+            float previousRange = ((Frame*)framesToCheck[0])->MaxRange;
 
             int i = 1;
             for (; i != frameCount; i++)
@@ -433,16 +431,19 @@ public class SL3Reader : IDisposable
         ArgumentNullException.ThrowIfNull(path);
 
         const string doubleFormat = "0.####";
-        CultureInfo invariantCulture = CultureInfo.InvariantCulture;
+        const int bufferSize = 16384;
 
         ReadOnlyCollection<nuint> frames3D = FrameByType[SurveyType.ThreeDimensional];
         int frames3DLength = frames3D.Count;
         if (frames3DLength < 1) return;
 
+        CultureInfo invariantCulture = CultureInfo.InvariantCulture;
         ReadOnlyCollection<GeoPoint> augmentedCoordinates = AugmentedCoordinates;
         ReadOnlyCollection<int> coordinate3DHelper = Coordinate3DHelper;
 
-        const int bufferSize = 16384;
+        string[] stringArray = new string[8];
+        StringBuilder stringBuilder = new(bufferSize);
+        
         using StreamWriter streamWriter = new(path!, Encoding.UTF8,
             new FileStreamOptions()
             {
@@ -452,9 +453,6 @@ public class SL3Reader : IDisposable
                 Options = FileOptions.SequentialScan
             });
         streamWriter.BaseStream.Write("CampaignID,DateTime,X[Lowrance_m],Y[Lowrance_m],Z[m_WGS84],Depth[m],Angle[°],Distance[m],Reliable\r\n"u8);
-
-        string[] stringArray = new string[8];
-        StringBuilder stringBuilder = new(bufferSize);
 
         for (int i = 0; i < frames3DLength; i++)
         {
@@ -643,14 +641,14 @@ public class SL3Reader : IDisposable
             ref ThreeDimensionalFrameHeader frame3DHeader = ref Unsafe.AsRef<ThreeDimensionalFrameHeader>
                 (Unsafe.Add<byte>(Unsafe.AsPointer<Frame>(ref ifFrame), ifFrame.HeaderSize));
 
-            Span<float> leftMeasurements = new(Unsafe.Add<byte>( Unsafe.AsPointer(ref frame3DHeader),frame3DHeader.HeaderSize), frame3DHeader.NumberOfLeftBytes / 4);
-            Span<float> rightMeasurements = new(Unsafe.Add<byte>(Unsafe.AsPointer(ref frame3DHeader), frame3DHeader.HeaderSize+ frame3DHeader.NumberOfLeftBytes), frame3DHeader.NumberOfRightBytes / 4);
-            Span<(float x, float y)> leftPairs =   MemoryMarshal.Cast<float, (float x, float y)>(leftMeasurements).ToArray().AsSpan();
+            Span<float> leftMeasurements = new(Unsafe.Add<byte>(Unsafe.AsPointer(ref frame3DHeader), frame3DHeader.HeaderSize), frame3DHeader.NumberOfLeftBytes / 4);
+            Span<float> rightMeasurements = new(Unsafe.Add<byte>(Unsafe.AsPointer(ref frame3DHeader), frame3DHeader.HeaderSize + frame3DHeader.NumberOfLeftBytes), frame3DHeader.NumberOfRightBytes / 4);
+            Span<(float x, float y)> leftPairs = MemoryMarshal.Cast<float, (float x, float y)>(leftMeasurements).ToArray().AsSpan();
             Span<(float x, float y)> rightPairs = MemoryMarshal.Cast<float, (float x, float y)>(rightMeasurements);
 
             MemoryExtensions.Reverse(leftPairs);
 
-            for (int k = 0; k < 1400-leftPairs.Length; k++)
+            for (int k = 0; k < 1400 - leftPairs.Length; k++)
             {
                 ifStringBuilder.Append("-9999 -9999 ");
             }

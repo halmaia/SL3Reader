@@ -2,7 +2,7 @@
   "profiles": {
     "SL3Reader": {
       "commandName": "Project",
-      "commandLineArgs": "F:\\SON\\Sonar0000.sl3  F:\\ -exp"
+      "commandLineArgs": "F:\\SON\\Sonar0000.sl3  F:\\SS -ssg0"
     }
   }
 }
