@@ -64,6 +64,24 @@ public static class Program
                 sl3reader.Export3D(output!, true, false);
                 PrintGreen("3D content with GNSS heading exported successfully. Unreliable points are included.\n");
                 break;
+
+            case "-3dmf":
+                sl3reader.Export3D(output!, false, true,true);
+                PrintGreen("Flipped 3D content with magnetic heading exported successfully.\n");
+                break;
+            case "-3dmf+":
+                sl3reader.Export3D(output!, true, true,true);
+                PrintGreen("Flipped 3D content with magnetic heading exported successfully. Unreliable points are included.\n");
+                break;
+            case "-3dgf":
+                sl3reader.Export3D(output!, false, false,true);
+                PrintGreen("Flipped 3D content with GNSS heading exported successfully.\n");
+                break;
+            case "-3dgf+":
+                sl3reader.Export3D(output!, true, false, true);
+                PrintGreen("Flipped 3D content with GNSS heading exported successfully. Unreliable points are included.\n");
+                break;
+
             case "-route":
                 sl3reader.ExportRoutePoints(output!);
                 PrintGreen("Route exported successfully.\n");
@@ -109,7 +127,7 @@ public static class Program
                 PrintGreen("Experimental output generated successfully.\n");
                 break;
             default:
-                WriteLine("Invalid argument (" + expSelector + ").");
+                PrintRed("Invalid argument (" + expSelector + ").");
                 PrintUsage();
                 return;
         }
@@ -120,10 +138,11 @@ public static class Program
         {
             WriteLine();
 
-            WriteLine("Usage examples:\n");
+            PrintGreen("Usage examples:\n");
 
             WriteLine("To export route:");
             WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -route\n");
+            
             WriteLine("To export 3D points with magnetic heading (e.g. measured with devices like Precision–9):");
             WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dm\n");
             WriteLine("To export 3D points with magnetic heading (e.g. measured with devices like Precision–9) with unreliable points:");
@@ -133,8 +152,16 @@ public static class Program
             WriteLine("To export 3D points with GNSS heading (e.g. in-built GPS) with unreliable points:");
             WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dg+\n");
 
-            WriteLine("To export side scan imagery:");
+            WriteLine("To export flipped 3D points with magnetic heading (e.g. measured with devices like Precision–9):");
+            WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dmf\n");
+            WriteLine("To export flipped 3D points with magnetic heading (e.g. measured with devices like Precision–9) with unreliable points:");
+            WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dmf+\n");
+            WriteLine("To export flipped 3D points with GNSS heading (e.g. in-built GPS):");
+            WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dgf\n");
+            WriteLine("To export flipped 3D points with GNSS heading (e.g. in-built GPS) with unreliable points:");
+            WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\output.csv\" -3dgf+\n");
 
+            WriteLine("To export side scan imagery:");
             WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ss\n");
             WriteLine("To export primary scan imagery:");
             WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ps\n");
@@ -144,6 +171,7 @@ public static class Program
             WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ds\n");
             WriteLine("To export frame type №7 imagery:");
             WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -u7\n");
+
             WriteLine("To export georeferenced side scan imagery:");
             WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ssg0\n");
             WriteLine("Preserved for future use. Do not use.");
@@ -156,7 +184,7 @@ public static class Program
             WriteLine("For experimental purpose only. Do not use.");
             WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -exp1\n");
 
-            WriteLine("If either the input file’s name/path or the output file name/path contains space(s) use double quotation mark (\") to enclose it, like \"D:\\My SL3 Files\\Best Catch.sl3\".\n");
+            WriteLine("If either the input file’s name/path or the output file name/path contains space(s) or special characters (#; @ etc.) use double quotation mark (\") to enclose it, like \"D:\\My SL3 Files\\Best Catch.sl3\".\n");
 
             WriteLine("For details see & cite the following publication: Halmai, Ákos; Gradwohl–Valkay, Alexandra; Czigány, Szabolcs; Ficsor, Johanna; Liptay, Zoltán Árpád; Kiss, Kinga; Lóczy, Dénes and Pirkhoffer, Ervin. 2020. \"Applicability of a Recreational-Grade Interferometric Sonar for the Bathymetric Survey and Monitoring of the Drava River\" ISPRS International Journal of Geo-Information 9, no. 3: 149. https://doi.org/10.3390/ijgi9030149 https://www.mdpi.com/2220-9964/9/3/149.\n");
             WriteLine("https://github.com/halmaia/SL3Reader");
@@ -175,13 +203,18 @@ public static class Program
             WriteLine("File statistics:");
             WriteLine("\tNumber of frames: " + len.ToString("# ##0"));
 
-            WriteLine("\tNumber of primary frames: " + indexByType[SurveyType.Primary].Count.ToString("# ##0"));
-            WriteLine("\tNumber of secondary frames: " + indexByType[SurveyType.Secondary].Count.ToString("# ##0"));
-            WriteLine("\tNumber of left sidescan frames: " + indexByType[SurveyType.LeftSideScan].Count.ToString("# ##0"));
-            WriteLine("\tNumber of right sidescan frames: " + indexByType[SurveyType.RightSideScan].Count.ToString("# ##0"));
-            WriteLine("\tNumber of sidescan frames: " + indexByType[SurveyType.SideScan].Count.ToString("# ##0"));
-            WriteLine("\tNumber of downscan frames: " + indexByType[SurveyType.DownScan].Count.ToString("# ##0"));
-            WriteLine("\tNumber of 3D frames: " + indexByType[SurveyType.ThreeDimensional].Count.ToString("# ##0"));
+            const string NrFormat = "# ##0";
+            WriteLine("\tNumber of primary frames: " + indexByType[SurveyType.Primary].Count.ToString(NrFormat));
+            WriteLine("\tNumber of secondary frames: " + indexByType[SurveyType.Secondary].Count.ToString(NrFormat));
+            WriteLine("\tNumber of left sidescan frames: " + indexByType[SurveyType.LeftSideScan].Count.ToString(NrFormat));
+            WriteLine("\tNumber of right sidescan frames: " + indexByType[SurveyType.RightSideScan].Count.ToString(NrFormat));
+            WriteLine("\tNumber of sidescan frames: " + indexByType[SurveyType.SideScan].Count.ToString(NrFormat));
+            WriteLine("\tNumber of downscan frames: " + indexByType[SurveyType.DownScan].Count.ToString(NrFormat));
+            WriteLine("\tNumber of №6 frames: " + indexByType[SurveyType.Unknown6].Count.ToString(NrFormat));
+            WriteLine("\tNumber of №7 frames: " + indexByType[SurveyType.Unknown7].Count.ToString(NrFormat));
+            WriteLine("\tNumber of №8 frames: " + indexByType[SurveyType.Unknown8].Count.ToString(NrFormat));
+            WriteLine("\tNumber of 3D frames: " + indexByType[SurveyType.ThreeDimensional].Count.ToString(NrFormat));
+
             WriteLine("\tDistance covered: " + sl3reader.AugmentedCoordinates.LastOrDefault().Distance.ToString("0.# m", invariantCulture));
 
             if (len is not 0)
@@ -192,7 +225,8 @@ public static class Program
                     WriteLine("\tEnd of the survey: " + ((Frame*)frames[len - 1])->Timestamp.ToString("yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'", invariantCulture));
                 }
             }
-
+            WriteLine();
+            WriteLine("End of execution: " + DateTime.UtcNow.ToString("yyyy'-'MM'-'dd HH':'mm':'ss.fff'Z'", invariantCulture));
             WriteLine();
         }
 

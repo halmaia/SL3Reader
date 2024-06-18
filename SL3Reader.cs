@@ -243,7 +243,7 @@ public class SL3Reader : IDisposable
                 BufferSize = 65536
             });
 
-        textWriter.Write("CampaignID[#],DateTime[UTC],SurveyType,WaterDepth[Feet],Longitude[°WGS48],Latitude[°WGS84],GNSSAltitude[Feet_WGS84],GNSSHeading[rad_azimuth],GNSSSpeed[m/s],MagneticHeading[rad_azimuth],MinRange[Feet],MaxRange[Feet],WaterTemperature[°C],WaterSpeed[Feet],HardwareTime[ms],Frequency,Milliseconds[ms],AugmentedX[m],AugmentedY[m]\r\n"u8);
+        textWriter.Write("CampaignID[#],DateTime[UTC],SurveyType,WaterDepth[Feet],Longitude[°WGS84],Latitude[°WGS84],GNSSAltitude[Feet_WGS84],GNSSHeading[rad_azimuth],GNSSSpeed[m/s],MagneticHeading[rad_azimuth],MinRange[Feet],MaxRange[Feet],WaterTemperature[°C],WaterSpeed[Feet],HardwareTime[ms],Frequency,Milliseconds[ms],AugmentedX[m],AugmentedY[m]\r\n"u8);
 
         // TODO: Filter is not working!
         //ReadOnlyCollection<nuint> frames = filter is SurveyType.All ? Frames : IndexByType[filter];
@@ -426,7 +426,7 @@ public class SL3Reader : IDisposable
         }
     }
 
-    public unsafe void Export3D(string path, bool includeUnreliable = false, bool magneticHeading = false)
+    public unsafe void Export3D(string path, bool includeUnreliable = false, bool magneticHeading = false, bool flip = false)
     {
         ArgumentNullException.ThrowIfNull(path);
 
@@ -454,6 +454,9 @@ public class SL3Reader : IDisposable
             });
         streamWriter.BaseStream.Write("CampaignID,DateTime,X[Lowrance_m],Y[Lowrance_m],Z[m_WGS84],Depth[m],Angle[°],Distance[m],Reliable\r\n"u8);
 
+        double leftConversionUnit = flip ? 0.3048d : -0.3048d;
+        double rightConversionUnit=-leftConversionUnit;
+
         for (int i = 0; i < frames3DLength; i++)
         {
             Frame* frame = (Frame*)frames3D[i];
@@ -480,7 +483,7 @@ public class SL3Reader : IDisposable
                 measurements += InterferometricMeasurement.Size)
             {
                 InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
-                double delta = -0.3048d * measurement->Delta, // Negative side
+                double delta = leftConversionUnit * measurement->Delta, // Negative side
                        depth = 0.3048d * measurement->Depth;
 
                 stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
@@ -499,7 +502,7 @@ public class SL3Reader : IDisposable
                 measurements += InterferometricMeasurement.Size)
             {
                 InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
-                double delta = .3048d * measurement->Delta, // Positive side 
+                double delta = rightConversionUnit* measurement->Delta, // Positive side 
                        depth = .3048d * measurement->Depth;
 
                 stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
@@ -521,7 +524,7 @@ public class SL3Reader : IDisposable
                     InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
                     if (measurement->IsValid)
                     {
-                        double delta = -0.3048d * measurement->Delta, // Negative side
+                        double delta = leftConversionUnit * measurement->Delta, // Negative side
                                depth = 0.3048d * measurement->Depth;
 
                         stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
@@ -542,7 +545,7 @@ public class SL3Reader : IDisposable
                     InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
                     if (measurement->IsValid)
                     {
-                        double delta = 0.3048d * measurement->Delta, // Positive side
+                        double delta = rightConversionUnit * measurement->Delta, // Positive side
                                depth = 0.3048d * measurement->Depth;
 
                         stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
@@ -751,7 +754,5 @@ public class SL3Reader : IDisposable
         Dispose(disposing: true);
         GC.SuppressFinalize(this);
     }
-
-
     #endregion Dispose Pattern
 };
