@@ -80,7 +80,7 @@ public static class Program
                 // sl3reader.ExportImagery(output!);
                 PrintGreen("Do not use! Preserved for future compatibility!\n");
                 break;
-            case "-ssg3":
+            case "-ssg2":
                 // sl3reader.ExportImagery(output!);
                 PrintGreen("Do not use! Preserved for future compatibility!\n");
                 break;
@@ -100,8 +100,12 @@ public static class Program
                 sl3reader.ExportImagery(output!, SurveyType.Unknown7);
                 PrintGreen("Frame type №7 imagery exported successfully.\n");
                 break;
-            case "-exp":
-                sl3reader.ExportSS_Int_Pair(output!);
+            case "-exp0":
+                sl3reader.ExportSS_Inf_Pair(output!);
+                PrintGreen("Experimental output generated successfully.\n");
+                break;
+            case "-exp1":
+                sl3reader.ExportSS_Inf_PairCNN(output!);
                 PrintGreen("Experimental output generated successfully.\n");
                 break;
             default:
@@ -138,8 +142,19 @@ public static class Program
             WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ses\n");
             WriteLine("To export down scan imagery:");
             WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ds\n");
-            WriteLine("To export frame type №7 imagery imagery:");
+            WriteLine("To export frame type №7 imagery:");
             WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -u7\n");
+            WriteLine("To export georeferenced side scan imagery:");
+            WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ssg0\n");
+            WriteLine("Preserved for future use. Do not use.");
+            WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ssg1\n");
+            WriteLine("Preserved for future use. Do not use.");
+            WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -ssg2\n");
+
+            WriteLine("For experimental purpose only. Do not use.");
+            WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -exp0\n");
+            WriteLine("For experimental purpose only. Do not use.");
+            WriteLine("\tSL3Reader.exe \"C:\\input.sl3\" \"D:\\OutputFolder\" -exp1\n");
 
             WriteLine("If either the input file’s name/path or the output file name/path contains space(s) use double quotation mark (\") to enclose it, like \"D:\\My SL3 Files\\Best Catch.sl3\".\n");
 

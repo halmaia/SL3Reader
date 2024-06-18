@@ -443,7 +443,7 @@ public class SL3Reader : IDisposable
 
         string[] stringArray = new string[8];
         StringBuilder stringBuilder = new(bufferSize);
-        
+
         using StreamWriter streamWriter = new(path!, Encoding.UTF8,
             new FileStreamOptions()
             {
@@ -601,15 +601,7 @@ public class SL3Reader : IDisposable
             disposedValue = true;
         }
     }
-
-    void IDisposable.Dispose()
-    {
-        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-        Dispose(disposing: true);
-        GC.SuppressFinalize(this);
-    }
-
-    internal unsafe void ExportSS_Int_Pair(string outputFolder)
+    internal unsafe void ExportSS_Inf_Pair(string outputFolder)
     {
         using var ssFile = File.OpenWrite(Path.Combine(outputFolder, "SS.txt"));
         using var ifFile = File.OpenWrite(Path.Combine(outputFolder, "IF.txt"));
@@ -677,5 +669,89 @@ public class SL3Reader : IDisposable
         }
 
     }
+    internal unsafe void ExportSS_Inf_PairCNN(string outputFolder)
+    {
+        using var ssIntensityFile = File.OpenWrite(Path.Combine(outputFolder, "SSIntensity.txt"));
+        using var ssRangeFile = File.OpenWrite(Path.Combine(outputFolder, "SSRange.txt"));
+        using var ifXFile = File.OpenWrite(Path.Combine(outputFolder, "IFX.txt"));
+        using var ifYFile = File.OpenWrite(Path.Combine(outputFolder, "IFY.txt"));
+
+        var SideScanFrames = FrameByType[SurveyType.SideScan];
+        var InterferometricFrames = FrameByType[SurveyType.ThreeDimensional];
+        var ssIntensityStringBuilder = new StringBuilder(2800 * 4);
+        var ssRangeStringBuilder = new StringBuilder(2800 * 19);
+        var ifXStringBuilder = new StringBuilder(2800 * 19);
+        var ifYStringBuilder = new StringBuilder(2800 * 19);
+
+        int n = 0;
+        foreach (nuint ss in SideScanFrames)
+        {
+            ref readonly Frame ssFrame = ref Unsafe.AsRef<Frame>((void*)ss);
+            ref Frame ifFrame = ref Unsafe.AsRef<Frame>((void*)InterferometricFrames[n]);
+            var ssStride = (ssFrame.MaxRange / 2800d) * (.3048 * 100);
+            var ssHalfStep = .5 * ssStride;
+
+            ReadOnlySpan<byte> ssBytes = new(Unsafe.Add<byte>((void*)ss, ssFrame.HeaderSize), 2800);
+
+
+            foreach (byte item in ssBytes)
+            {
+                ssIntensityStringBuilder.Append(item).Append(' ');
+            }
+
+            ssIntensityStringBuilder.AppendLine();
+            ssIntensityFile.Write(Encoding.UTF8.GetBytes(ssIntensityStringBuilder.ToString()));
+            ssIntensityStringBuilder.Clear();
+
+            int i = -1399; bool left = true;
+            for (int x = 0; x < 2800; x++)
+            {
+                ssRangeStringBuilder.Append(double.FusedMultiplyAdd(i, ssStride, ssHalfStep)).Append(' ');
+                if (left && i == 0)
+                { left = false; }
+                else i++;
+            }
+            ssRangeStringBuilder.AppendLine();
+            ssRangeFile.Write(Encoding.UTF8.GetBytes(ssRangeStringBuilder.ToString()));
+            ssRangeStringBuilder.Clear();
+
+            ref ThreeDimensionalFrameHeader frame3DHeader = ref Unsafe.AsRef<ThreeDimensionalFrameHeader>
+                (Unsafe.Add<byte>(Unsafe.AsPointer<Frame>(ref ifFrame), ifFrame.HeaderSize));
+
+            Span<float> leftMeasurements = new(Unsafe.Add<byte>(Unsafe.AsPointer(ref frame3DHeader), frame3DHeader.HeaderSize), frame3DHeader.NumberOfLeftBytes / 4);
+            Span<float> rightMeasurements = new(Unsafe.Add<byte>(Unsafe.AsPointer(ref frame3DHeader), frame3DHeader.HeaderSize + frame3DHeader.NumberOfLeftBytes), frame3DHeader.NumberOfRightBytes / 4);
+            Span<(float x, float y)> leftPairs = MemoryMarshal.Cast<float, (float x, float y)>(leftMeasurements);
+            Span<(float x, float y)> rightPairs = MemoryMarshal.Cast<float, (float x, float y)>(rightMeasurements);
+
+
+            for (int k = 0; k < leftPairs.Length; k++)
+            {
+                ifXStringBuilder.Append(k).Append(' ').Append(n).Append(' ').Append(leftPairs[k].x * (-.3048 * 100)).AppendLine(" ");
+                ifYStringBuilder.Append(k).Append(' ').Append(n).Append(' ').Append(leftPairs[k].y * (.3048 * 100)).AppendLine(" ");
+            }
+
+            for (int k = 0; k < rightPairs.Length; k++)
+            {
+                ifXStringBuilder.Append(k).Append(' ').Append(n).Append(' ').Append(rightPairs[k].x * (-.3048 * 100)).AppendLine(" ");
+                ifYStringBuilder.Append(k).Append(' ').Append(n).Append(' ').Append(rightPairs[k].y * (.3048 * 100)).AppendLine(" ");
+            }
+
+            ifXFile.Write(Encoding.UTF8.GetBytes(ifXStringBuilder.ToString()));
+            ifXStringBuilder.Clear();
+
+            ifYFile.Write(Encoding.UTF8.GetBytes(ifYStringBuilder.ToString()));
+            ifYStringBuilder.Clear();
+            n++;
+        }
+
+    }
+    void IDisposable.Dispose()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+
     #endregion Dispose Pattern
 };
