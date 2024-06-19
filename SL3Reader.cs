@@ -10,7 +10,6 @@ using System.IO.MemoryMappedFiles;
 using System.Collections.ObjectModel;
 using System.Text;
 using System.Runtime.InteropServices;
-using System.Text.Unicode;
 
 namespace SL3Reader;
 
