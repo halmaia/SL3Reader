@@ -2,7 +2,7 @@
   "profiles": {
     "SL3Reader": {
       "commandName": "Project",
-      "commandLineArgs": "D:\\Brasil\\Sonar0003.sl3  D:\\Brasil\\Swap_3D_ir.txt -3dg+x"
+      "commandLineArgs": "\"D:\\Brasil\\Sonar0003.sl3\"  F:\\ -exp1"
     }
   }
 }
