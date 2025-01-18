@@ -265,11 +265,11 @@ public readonly struct Frame
     private const double HalfPI = double.Pi / 2d;
     private const double MillisecondsToSeconds = 1d / 1000d;
     private const double FootToMeter = 0.3048d;
-    public readonly (double x, double y, double z, double v, double t, double d) QueryMetric() =>
-               (X, Y,
+    public readonly (double longitude, double lattitude, double z, double v, double t, double d) QueryPositionHeadingSpeedTime() =>
+               (Longitude, Latitude,
                 FootToMeter * GNSSAltitude,
                 KnotsToMpS * GNSSSpeed,
                 MillisecondsToSeconds * Milliseconds,
-                Math.Tau - GNSSHeading + HalfPI);
+                HalfPI - GNSSHeading);
     #endregion Coordinate augmentation support
 }

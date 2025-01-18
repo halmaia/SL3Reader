@@ -158,7 +158,7 @@ public class SL3Reader : IDisposable
         }.AsReadOnly();
 
         Coordinate3DHelper = coordinate3DHelper.ToReadOnlyCollection();
-        //ExamineUnknown8Datasets();
+        // ExamineUnknown8Datasets();
         return;
 
         // Local functions:
@@ -166,21 +166,19 @@ public class SL3Reader : IDisposable
         static ReadOnlyCollection<GeoPoint> AugmentTrajectory(ReadOnlyCollectionBuilder<nuint> frames)
         {
             const double lim = 1.2d;
-            const double C = 1.4326d; // Empirical, around √2.
 
             ReadOnlyCollectionBuilder<GeoPoint> coordinates = new(frames.Count);
 
-            (double x0, double y0, double z0, double v0, double t0, double d0) = ((Frame*)frames[0])->QueryMetric();
-            coordinates.Add(new(x0, y0, d0, z0, 0)); // The first one.
-            double distance = 0, xprev = x0, yprev = y0;
+            (double longitude0, double lattitude0, double z0, double v0, double t0, double d0) = ((Frame*)frames[0])->QueryPositionHeadingSpeedTime();
+            coordinates.Add(new(longitude0, lattitude0, d0, z0, 0)); // The first one.
+            double distance = 0, LongPrev = longitude0, LatPrev = lattitude0;
 
             for (int i = 1, frameCount = frames.Count; i != frameCount;)
             {
                 Frame* frame = (Frame*)frames[i++];
 
-
-                (double x1, double y1, double z1, double v1, double t1, double d1) =
-                    frame->QueryMetric();
+                (double longitude1, double lattitude1, double z1, double v1, double t1, double d1) =
+                    frame->QueryPositionHeadingSpeedTime();
 
                 (double sin0, double cos0) = double.SinCos(d0);
                 (double sin1, double cos1) = double.SinCos(d1);
@@ -191,37 +189,48 @@ public class SL3Reader : IDisposable
                        vy1 = sin1 * v1,
                        dt = t1 - t0;
 
-                x0 += C * .5d * (vx0 + vx1) * dt;
-                y0 += C * .5d * (vy0 + vy1) * dt;
+                lattitude0 += dt * .5d * (vy0 + vy1) * 180d / (double.Pi * 6356752.3142d);
+                longitude0 += dt * .5d * (vx0 + vx1) * 180d / (double.Pi * double.Cos(double.DegreesToRadians(lattitude0)) * 6356752.3142d);
 
                 d0 = d1; t0 = t1; v0 = v1;
 
                 if (frame->SurveyType is SurveyType.Primary or SurveyType.Secondary or
                     SurveyType.Unknown7 or SurveyType.Unknown8)
                 {
-                    double dy = y0 - y1;
+                    double dy = GetLattitudeDistance(lattitude0, lattitude1);
                     if (double.Abs(dy) > lim)
-                        y0 = y1 + double.CopySign(lim, dy);
+                        lattitude0 = lattitude1 + double.CopySign(double.RadiansToDegrees(lim / 6356752.3142d), lattitude0-lattitude1);
 
-                    double dx = x0 - x1;
+                    double dx = GetLongitudeDistance(longitude0, longitude1, lattitude0);
                     if (double.Abs(dx) > lim)
-                        x0 = x1 + double.CopySign(lim, dx);
+                        longitude0 = longitude1 + double.CopySign(double.RadiansToDegrees(lim / (6356752.3142d * double.Cos(double.DegreesToRadians(lattitude0)))), longitude0-longitude1);
                 }
                 else
                 {
-                    double dy = y0 - y1;
+                    double dy = GetLattitudeDistance(lattitude0, lattitude1);
                     if (double.Abs(dy) > 50) // Detect serious errors.
-                        y0 = frame->Y;
+                        lattitude0 = frame->Latitude;
 
-                    double dx = x0 - x1;
+                    double dx = GetLongitudeDistance(longitude0, longitude1, lattitude0);
                     if (double.Abs(dx) > 50) // Detect serious errors.
-                        x0 = frame->X;
+                        longitude0 = frame->Longitude;
                 }
 
-                coordinates.Add(new(x0, y0, d0, z1, distance += double.Hypot(x0 - xprev, y0 - yprev)));
-                xprev = x0; yprev = y0;
+                coordinates.Add(new(longitude0, lattitude0, d0, z1, distance += double.Hypot(GetLongitudeDistance(longitude0, LongPrev, lattitude0), GetLattitudeDistance(lattitude0, LatPrev))));
+                LongPrev = longitude0; LatPrev = lattitude0;
+
             }
             return coordinates.ToReadOnlyCollection();
+
+            static double GetLattitudeDistance(double lat1, double lat2)
+            {
+                return double.DegreesToRadians(double.Abs(lat2 - lat1)) * 6356752.3142d;
+            }
+
+            static double GetLongitudeDistance(double lon1, double lon2, double lat)
+            {
+                return double.DegreesToRadians(double.Abs(lon2 - lon1)) * (6356752.3142d * double.Cos(double.DegreesToRadians(lat)));
+            }
         }
     }
 
@@ -409,6 +418,7 @@ public class SL3Reader : IDisposable
         int unknown8FrameCount = unknown8Frames.Count;
         if (unknown8FrameCount < 1) return; // Return when no U8 exists
 
+        using var writer = File.CreateText(@"F:\Sample.csv");
         for (int i = 0; i < unknown8FrameCount; i++)
         {
 
@@ -416,11 +426,11 @@ public class SL3Reader : IDisposable
             byte* ptr = ((byte*)currentFrame) + currentFrame->HeaderSize;
             for (int j = 0; j < 512; j += 2, ptr += 2)
             {
-                //Debug.Print((*(short*)ptr).ToString());
-                if ((*(short*)ptr) is not 0)
-                    Debug.Print("M");
+                writer.Write((*(short*)ptr).ToString() + ',');
             }
+            writer.WriteLine();
         }
+        writer.Dispose();
     }
 
     public unsafe void Export3D(string path, bool includeUnreliable = false, bool magneticHeading = false, bool flip = false)
@@ -725,8 +735,8 @@ public class SL3Reader : IDisposable
             ssStringBuilder.Append("255,").Append(ssFrame.WaterDepth).Append(',');
             int k = 0;
             double range = double.FusedMultiplyAdd(ssStride, k, ssHalfStep);
-       
-            for (int j = 1399; j >= 0 && range<=leftMaxDist; j--)
+
+            for (int j = 1399; j >= 0 && range <= leftMaxDist; j--)
             {
                 ssStringBuilder.Append(ssBytes[j]).Append(',').Append(range.ToString("0.######")).Append(',');
                 k++;
@@ -740,7 +750,7 @@ public class SL3Reader : IDisposable
             ssStringBuilder.Append("255,").Append(ssFrame.WaterDepth).Append(',');
             k = 0;
             range = double.FusedMultiplyAdd(ssStride, k, ssHalfStep);
-            for (int j = 1400; j < 2800 && range<=rightMaxDist; j++)
+            for (int j = 1400; j < 2800 && range <= rightMaxDist; j++)
             {
                 ssStringBuilder.Append(ssBytes[j]).Append(',').Append(range.ToString("0.######")).Append(',');
                 k++;

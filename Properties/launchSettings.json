@@ -2,7 +2,7 @@
   "profiles": {
     "SL3Reader": {
       "commandName": "Project",
-      "commandLineArgs": "\"D:\\Brasil\\Sonar0006 with Precision9.sl3\"  F:\\ -exp1" 
+      "commandLineArgs": "\"C:\\Users\\halmaia\\Desktop\\CardSave\\CIKK2.sl3\"  F:\\route5.txt -route" 
     }
   }
 }
