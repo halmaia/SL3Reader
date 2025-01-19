@@ -198,21 +198,21 @@ public class SL3Reader : IDisposable
                     SurveyType.Unknown7 or SurveyType.Unknown8)
                 {
                     double dy = GetLattitudeDistance(lattitude0, lattitude1);
-                    if (double.Abs(dy) > lim)
-                        lattitude0 = lattitude1 + double.CopySign(double.RadiansToDegrees(lim / 6356752.3142d), lattitude0-lattitude1);
+                    if (dy > lim)
+                        lattitude0 = lattitude1 + double.CopySign(double.RadiansToDegrees(lim / 6356752.3142d), lattitude0 - lattitude1);
 
                     double dx = GetLongitudeDistance(longitude0, longitude1, lattitude0);
-                    if (double.Abs(dx) > lim)
-                        longitude0 = longitude1 + double.CopySign(double.RadiansToDegrees(lim / (6356752.3142d * double.Cos(double.DegreesToRadians(lattitude0)))), longitude0-longitude1);
+                    if (dx > lim)
+                        longitude0 = longitude1 + double.CopySign(double.RadiansToDegrees(lim / (6356752.3142d * double.Cos(double.DegreesToRadians(lattitude0)))), longitude0 - longitude1);
                 }
                 else
                 {
                     double dy = GetLattitudeDistance(lattitude0, lattitude1);
-                    if (double.Abs(dy) > 50) // Detect serious errors.
+                    if (dy > 50d) // Detect serious errors.
                         lattitude0 = frame->Latitude;
 
                     double dx = GetLongitudeDistance(longitude0, longitude1, lattitude0);
-                    if (double.Abs(dx) > 50) // Detect serious errors.
+                    if (dx > 50d) // Detect serious errors.
                         longitude0 = frame->Longitude;
                 }
 
@@ -222,15 +222,12 @@ public class SL3Reader : IDisposable
             }
             return coordinates.ToReadOnlyCollection();
 
-            static double GetLattitudeDistance(double lat1, double lat2)
-            {
-                return double.DegreesToRadians(double.Abs(lat2 - lat1)) * 6356752.3142d;
-            }
+            static double GetLattitudeDistance(double lat1, double lat2) => 
+                double.DegreesToRadians(double.Abs(lat2 - lat1)) * 6356752.3142d;
 
-            static double GetLongitudeDistance(double lon1, double lon2, double lat)
-            {
-                return double.DegreesToRadians(double.Abs(lon2 - lon1)) * (6356752.3142d * double.Cos(double.DegreesToRadians(lat)));
-            }
+            static double GetLongitudeDistance(double lon1, double lon2, double lat) => 
+                double.DegreesToRadians(double.Abs(lon2 - lon1)) * 
+                                       (6356752.3142d * double.Cos(double.DegreesToRadians(lat)));
         }
     }
 

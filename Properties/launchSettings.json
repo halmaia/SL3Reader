@@ -2,7 +2,7 @@
   "profiles": {
     "SL3Reader": {
       "commandName": "Project",
-      "commandLineArgs": "\"C:\\Users\\halmaia\\Desktop\\CardSave\\CIKK2.sl3\"  F:\\route5.txt -route" 
+      "commandLineArgs": "\"C:\\Users\\halmaia\\Desktop\\CardSave\\CIKK2.sl3\"  F:\\route6.txt -route" 
     }
   }
 }
