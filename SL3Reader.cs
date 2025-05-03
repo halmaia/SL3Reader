@@ -189,15 +189,15 @@ public class SL3Reader : IDisposable
                        vy1 = sin1 * v1,
                        dt = t1 - t0;
 
-                latitude0 += dt * .5d * (vy0 + vy1) * 180d / (double.Pi * 6371008.7714d);
-                longitude0 += dt * .5d * (vx0 + vx1) * 180d / (double.Pi * double.Cos(double.DegreesToRadians(latitude0)) * 6371008.7714d);
+                latitude0 += dt * .5d * (vy0 + vy1) * 180d / (double.Pi * 6356752.3142d);
+                longitude0 += dt * .5d * (vx0 + vx1) * 180d / (double.Pi * double.Cos(double.DegreesToRadians(latitude0)) * 6356752.3142d);
 
                 d0 = d1; t0 = t1; v0 = v1;
 
                 if (frame->SurveyType is SurveyType.Primary or SurveyType.Secondary or
                     SurveyType.Unknown7 or SurveyType.Unknown8)
                 {
-                    double dy = GetLattitudeDistance(latitude0, latitude1);
+                    double dy = GetLatitudeDistance(latitude0, latitude1);
                     if (dy > lim)
                         latitude0 = latitude1 + double.CopySign(double.RadiansToDegrees(lim / 6356752.3142d), latitude0 - latitude1);
 
@@ -207,7 +207,7 @@ public class SL3Reader : IDisposable
                 }
                 else
                 {
-                    double dy = GetLattitudeDistance(latitude0, latitude1);
+                    double dy = GetLatitudeDistance(latitude0, latitude1);
                     if (dy > 50d) // Detect serious errors.
                         latitude0 = frame->Latitude;
 
@@ -216,17 +216,17 @@ public class SL3Reader : IDisposable
                         longitude0 = frame->Longitude;
                 }
 
-                coordinates.Add(new(longitude0, latitude0, d0, z1, distance += double.Hypot(GetLongitudeDistance(longitude0, LongPrev, latitude0), GetLattitudeDistance(latitude0, LatPrev))));
+                coordinates.Add(new(longitude0, latitude0, d0, z1, distance += double.Hypot(GetLongitudeDistance(longitude0, LongPrev, latitude0), GetLatitudeDistance(latitude0, LatPrev))));
                 LongPrev = longitude0; LatPrev = latitude0;
 
             }
             return coordinates.ToReadOnlyCollection();
 
-            static double GetLattitudeDistance(double lat1, double lat2) => 
+            static double GetLatitudeDistance(double lat1, double lat2) =>
                 double.DegreesToRadians(double.Abs(lat2 - lat1)) * 6356752.3142d;
 
-            static double GetLongitudeDistance(double lon1, double lon2, double lat) => 
-                double.DegreesToRadians(double.Abs(lon2 - lon1)) * 
+            static double GetLongitudeDistance(double lon1, double lon2, double lat) =>
+                double.DegreesToRadians(double.Abs(lon2 - lon1)) *
                                        (6356752.3142d * double.Cos(double.DegreesToRadians(lat)));
         }
     }
@@ -337,17 +337,27 @@ public class SL3Reader : IDisposable
                     sourceGCPs.Add(new(.5, -(s - first) + .5, default, default, default));
 
                     GeoPoint Strip = AugmentedCoordinates[Frames.IndexOf(imageFrames[s])];
+
+                    double centralLon = double.DegreesToRadians(Strip.Longitude);
+                    double centralLat = double.DegreesToRadians(Strip.Latitude);
+                    double deltaLat = centralLat + 1 / 6356752.3142d;
+                    double deltaLon = centralLon + 1 / (double.Cos(centralLat) * 6356752.3142d);
+                    double projX = 6356752.3142d * deltaLon;
+                    double projY = 6356752.3142d * double.Atanh(double.Sin(deltaLat));
+                    double fX = (projX - Strip.X);
+                    double fY = (projY - Strip.Y);
+
                     Frame* frame = (Frame*)imageFrames[s];
                     (double sin, double cos) =
                     double.SinCos(frame->GNSSHeading - .5 * double.Pi);
 
                     targetGCPs.AddRange([
                     Strip,
-                    new(double.FusedMultiplyAdd(-delta, sin, Strip.X),
-                        double.FusedMultiplyAdd(-delta, cos, Strip.Y),
+                    new(double.FusedMultiplyAdd(-delta, fX* sin, Strip.X),
+                        double.FusedMultiplyAdd(-delta, fY*cos, Strip.Y),
                         0, 0, 0),
-                    new(double.FusedMultiplyAdd(delta, sin, Strip.X),
-                        double.FusedMultiplyAdd(delta, cos, Strip.Y),
+                    new(double.FusedMultiplyAdd(delta, fX* sin, Strip.X),
+                        double.FusedMultiplyAdd(delta, fY*cos, Strip.Y),
                         0, 0, 0)]);
                 }
 
@@ -473,6 +483,17 @@ public class SL3Reader : IDisposable
                    centralY = augmentedCoordinate.Y,
                    centralZ = .3048 * augmentedCoordinate.Altitude;
 
+            // Correction factor:
+            double centralLon = double.DegreesToRadians(augmentedCoordinate.Longitude);
+            double centralLat = double.DegreesToRadians(augmentedCoordinate.Latitude);
+            double deltaLat = centralLat + 1 / 6356752.3142d;
+            double deltaLon = centralLon + 1 / (double.Cos(centralLat) * 6356752.3142d);
+            double projX = 6356752.3142d * deltaLon;
+            double projY = 6356752.3142d * double.Atanh(double.Sin(deltaLat));
+            double fX =  (projX - centralX);
+            double fY =  (projY - centralY);
+
+
             (double sin, double cos) =
                 double.SinCos((magneticHeading ? frame->MagneticHeading : frame->GNSSHeading) - .5 * double.Pi);
 
@@ -489,9 +510,9 @@ public class SL3Reader : IDisposable
                 InterferometricMeasurement* measurement = (InterferometricMeasurement*)measurements;
                 double delta = leftConversionUnit * measurement->Delta, // Negative side
                        depth = 0.3048d * measurement->Depth;
-
-                stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
-                stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
+                // ### //
+                stringArray[2] = double.FusedMultiplyAdd(delta, fX* sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                stringArray[3] = double.FusedMultiplyAdd(delta, fY*cos, centralY).ToString(doubleFormat, invariantCulture);
                 stringArray[4] = (centralZ - depth).ToString(doubleFormat, invariantCulture);
                 stringArray[5] = depth.ToString(doubleFormat, invariantCulture);
                 stringArray[6] = measurement->AngleInDegrees.ToString(doubleFormat, invariantCulture);
@@ -509,8 +530,8 @@ public class SL3Reader : IDisposable
                 double delta = rightConversionUnit * measurement->Delta, // Positive side 
                        depth = .3048d * measurement->Depth;
 
-                stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
-                stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
+                stringArray[2] = double.FusedMultiplyAdd(delta,fX* sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                stringArray[3] = double.FusedMultiplyAdd(delta,fY* cos, centralY).ToString(doubleFormat, invariantCulture);
                 stringArray[4] = (centralZ - depth).ToString(doubleFormat, invariantCulture);
                 stringArray[5] = depth.ToString(doubleFormat, invariantCulture);
                 stringArray[6] = measurement->AngleInDegrees.ToString(doubleFormat, invariantCulture);
@@ -531,8 +552,8 @@ public class SL3Reader : IDisposable
                         double delta = leftConversionUnit * measurement->Delta, // Negative side
                                depth = 0.3048d * measurement->Depth;
 
-                        stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
-                        stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
+                        stringArray[2] = double.FusedMultiplyAdd(delta, fX* sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                        stringArray[3] = double.FusedMultiplyAdd(delta, fY* cos, centralY).ToString(doubleFormat, invariantCulture);
                         stringArray[4] = (centralZ - depth).ToString(doubleFormat, invariantCulture);
                         stringArray[5] = depth.ToString(doubleFormat, invariantCulture);
                         stringArray[6] = measurement->AngleInDegrees.ToString(doubleFormat, invariantCulture);
@@ -552,8 +573,8 @@ public class SL3Reader : IDisposable
                         double delta = rightConversionUnit * measurement->Delta, // Positive side
                                depth = 0.3048d * measurement->Depth;
 
-                        stringArray[2] = double.FusedMultiplyAdd(delta, sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
-                        stringArray[3] = double.FusedMultiplyAdd(delta, cos, centralY).ToString(doubleFormat, invariantCulture);
+                        stringArray[2] = double.FusedMultiplyAdd(delta, fX* sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                        stringArray[3] = double.FusedMultiplyAdd(delta,  fY*cos, centralY).ToString(doubleFormat, invariantCulture);
                         stringArray[4] = (centralZ - depth).ToString(doubleFormat, invariantCulture);
                         stringArray[5] = depth.ToString(doubleFormat, invariantCulture);
                         stringArray[6] = measurement->AngleInDegrees.ToString(doubleFormat, invariantCulture);

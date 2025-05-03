@@ -21,7 +21,7 @@ internal static class GeoReferenceHelper
                   <XF_0 xsi:type="typens:PolynomialXform">
                     <PolynomialOrder>2</PolynomialOrder>
                     <SpatialReference xsi:type="typens:ProjectedCoordinateSystem">
-                      <WKT>PROJCS["Lowrance_Mercator",GEOGCS["Lowrance_Sphere",DATUM["D_Lowrance_Sphere",SPHEROID["Lowrance_Sphere",6356752.31424518,0.0]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Mercator"],PARAMETER["False_Easting",0.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",0.0],PARAMETER["Standard_Parallel_1",0.0],UNIT["Meter",1.0]]</WKT>
+                      <WKT>PROJCS["Lowrance_Mercator",GEOGCS["Lowrance_Sphere",DATUM["D_Lowrance_Sphere",SPHEROID["Lowrance_Sphere",6356752.3142,0.0]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Mercator"],PARAMETER["False_Easting",0.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",0.0],PARAMETER["Standard_Parallel_1",0.0],UNIT["Meter",1.0]]</WKT>
                       <XOrigin>-19970500</XOrigin>
                       <YOrigin>-30139700</YOrigin>
                       <XYScale>10000</XYScale>
@@ -48,11 +48,11 @@ internal static class GeoReferenceHelper
         {
             file.Write(doubleOpen);
             GeoPoint current = sourceGCPs[i];
-            current.X.TryFormat(utf8Destination, out int bytesWritten, provider: invariantCulture);
+            current.Longitude.TryFormat(utf8Destination, out int bytesWritten, provider: invariantCulture);
             file.Write(utf8Destination[..bytesWritten]);
             file.Write(doubleClose);
             file.Write(doubleOpen);
-            current.Y.TryFormat(utf8Destination, out bytesWritten, provider: invariantCulture);
+            current.Latitude.TryFormat(utf8Destination, out bytesWritten, provider: invariantCulture);
             file.Write(utf8Destination[..bytesWritten]);
             file.Write(doubleClose);
         }
@@ -67,11 +67,11 @@ internal static class GeoReferenceHelper
         {
             file.Write(doubleOpen);
             GeoPoint current = targetGCPs[i];
-            current.X.TryFormat(utf8Destination, out int bytesWritten, provider: invariantCulture);
+            current.Longitude.TryFormat(utf8Destination, out int bytesWritten, provider: invariantCulture);
             file.Write(utf8Destination[..bytesWritten]);
             file.Write(doubleClose);
             file.Write(doubleOpen);
-            current.Y.TryFormat(utf8Destination, out bytesWritten, provider: invariantCulture);
+            current.Latitude.TryFormat(utf8Destination, out bytesWritten, provider: invariantCulture);
             file.Write(utf8Destination[..bytesWritten]);
             file.Write(doubleClose);
         }

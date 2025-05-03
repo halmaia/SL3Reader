@@ -2,7 +2,7 @@
   "profiles": {
     "SL3Reader": {
       "commandName": "Project",
-      "commandLineArgs": "\"F:\\Bryan.sl3\"  F:\\routeNew.txt -route"
+      "commandLineArgs": "\"F:\\Bryan.sl3\"  F:\\SS2 -ssg0"
     }
   }
 }
