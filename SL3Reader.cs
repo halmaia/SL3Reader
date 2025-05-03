@@ -169,15 +169,15 @@ public class SL3Reader : IDisposable
 
             ReadOnlyCollectionBuilder<GeoPoint> coordinates = new(frames.Count);
 
-            (double longitude0, double lattitude0, double z0, double v0, double t0, double d0) = ((Frame*)frames[0])->QueryPositionHeadingSpeedTime();
-            coordinates.Add(new(longitude0, lattitude0, d0, z0, 0)); // The first one.
-            double distance = 0, LongPrev = longitude0, LatPrev = lattitude0;
+            (double longitude0, double latitude0, double z0, double v0, double t0, double d0) = ((Frame*)frames[0])->QueryPositionHeadingSpeedTime();
+            coordinates.Add(new(longitude0, latitude0, d0, z0, 0)); // The first one.
+            double distance = 0, LongPrev = longitude0, LatPrev = latitude0;
 
             for (int i = 1, frameCount = frames.Count; i != frameCount;)
             {
                 Frame* frame = (Frame*)frames[i++];
 
-                (double longitude1, double lattitude1, double z1, double v1, double t1, double d1) =
+                (double longitude1, double latitude1, double z1, double v1, double t1, double d1) =
                     frame->QueryPositionHeadingSpeedTime();
 
                 (double sin0, double cos0) = double.SinCos(d0);
@@ -189,35 +189,35 @@ public class SL3Reader : IDisposable
                        vy1 = sin1 * v1,
                        dt = t1 - t0;
 
-                lattitude0 += dt * .5d * (vy0 + vy1) * 180d / (double.Pi * 6356752.3142d);
-                longitude0 += dt * .5d * (vx0 + vx1) * 180d / (double.Pi * double.Cos(double.DegreesToRadians(lattitude0)) * 6356752.3142d);
+                latitude0 += dt * .5d * (vy0 + vy1) * 180d / (double.Pi * 6371008.7714d);
+                longitude0 += dt * .5d * (vx0 + vx1) * 180d / (double.Pi * double.Cos(double.DegreesToRadians(latitude0)) * 6371008.7714d);
 
                 d0 = d1; t0 = t1; v0 = v1;
 
                 if (frame->SurveyType is SurveyType.Primary or SurveyType.Secondary or
                     SurveyType.Unknown7 or SurveyType.Unknown8)
                 {
-                    double dy = GetLattitudeDistance(lattitude0, lattitude1);
+                    double dy = GetLattitudeDistance(latitude0, latitude1);
                     if (dy > lim)
-                        lattitude0 = lattitude1 + double.CopySign(double.RadiansToDegrees(lim / 6356752.3142d), lattitude0 - lattitude1);
+                        latitude0 = latitude1 + double.CopySign(double.RadiansToDegrees(lim / 6356752.3142d), latitude0 - latitude1);
 
-                    double dx = GetLongitudeDistance(longitude0, longitude1, lattitude0);
+                    double dx = GetLongitudeDistance(longitude0, longitude1, latitude0);
                     if (dx > lim)
-                        longitude0 = longitude1 + double.CopySign(double.RadiansToDegrees(lim / (6356752.3142d * double.Cos(double.DegreesToRadians(lattitude0)))), longitude0 - longitude1);
+                        longitude0 = longitude1 + double.CopySign(double.RadiansToDegrees(lim / (6356752.3142d * double.Cos(double.DegreesToRadians(latitude0)))), longitude0 - longitude1);
                 }
                 else
                 {
-                    double dy = GetLattitudeDistance(lattitude0, lattitude1);
+                    double dy = GetLattitudeDistance(latitude0, latitude1);
                     if (dy > 50d) // Detect serious errors.
-                        lattitude0 = frame->Latitude;
+                        latitude0 = frame->Latitude;
 
-                    double dx = GetLongitudeDistance(longitude0, longitude1, lattitude0);
+                    double dx = GetLongitudeDistance(longitude0, longitude1, latitude0);
                     if (dx > 50d) // Detect serious errors.
                         longitude0 = frame->Longitude;
                 }
 
-                coordinates.Add(new(longitude0, lattitude0, d0, z1, distance += double.Hypot(GetLongitudeDistance(longitude0, LongPrev, lattitude0), GetLattitudeDistance(lattitude0, LatPrev))));
-                LongPrev = longitude0; LatPrev = lattitude0;
+                coordinates.Add(new(longitude0, latitude0, d0, z1, distance += double.Hypot(GetLongitudeDistance(longitude0, LongPrev, latitude0), GetLattitudeDistance(latitude0, LatPrev))));
+                LongPrev = longitude0; LatPrev = latitude0;
 
             }
             return coordinates.ToReadOnlyCollection();

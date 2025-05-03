@@ -115,7 +115,7 @@ public readonly struct Frame
     }
 
     /// <summary>
-    /// Provides the data offset relatively to the begining of the frame.
+    /// Provides the data offset relatively to the beginning of the frame.
     /// </summary>
     public readonly int HeaderSize
     {
