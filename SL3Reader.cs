@@ -490,8 +490,8 @@ public class SL3Reader : IDisposable
             double deltaLon = centralLon + 1 / (double.Cos(centralLat) * 6356752.3142d);
             double projX = 6356752.3142d * deltaLon;
             double projY = 6356752.3142d * double.Atanh(double.Sin(deltaLat));
-            double fX =  (projX - centralX);
-            double fY =  (projY - centralY);
+            double fX = (projX - centralX);
+            double fY = (projY - centralY);
 
 
             (double sin, double cos) =
@@ -511,8 +511,8 @@ public class SL3Reader : IDisposable
                 double delta = leftConversionUnit * measurement->Delta, // Negative side
                        depth = 0.3048d * measurement->Depth;
                 // ### //
-                stringArray[2] = double.FusedMultiplyAdd(delta, fX* sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
-                stringArray[3] = double.FusedMultiplyAdd(delta, fY*cos, centralY).ToString(doubleFormat, invariantCulture);
+                stringArray[2] = double.FusedMultiplyAdd(delta, fX * sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                stringArray[3] = double.FusedMultiplyAdd(delta, fY * cos, centralY).ToString(doubleFormat, invariantCulture);
                 stringArray[4] = (centralZ - depth).ToString(doubleFormat, invariantCulture);
                 stringArray[5] = depth.ToString(doubleFormat, invariantCulture);
                 stringArray[6] = measurement->AngleInDegrees.ToString(doubleFormat, invariantCulture);
@@ -530,8 +530,8 @@ public class SL3Reader : IDisposable
                 double delta = rightConversionUnit * measurement->Delta, // Positive side 
                        depth = .3048d * measurement->Depth;
 
-                stringArray[2] = double.FusedMultiplyAdd(delta,fX* sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
-                stringArray[3] = double.FusedMultiplyAdd(delta,fY* cos, centralY).ToString(doubleFormat, invariantCulture);
+                stringArray[2] = double.FusedMultiplyAdd(delta, fX * sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                stringArray[3] = double.FusedMultiplyAdd(delta, fY * cos, centralY).ToString(doubleFormat, invariantCulture);
                 stringArray[4] = (centralZ - depth).ToString(doubleFormat, invariantCulture);
                 stringArray[5] = depth.ToString(doubleFormat, invariantCulture);
                 stringArray[6] = measurement->AngleInDegrees.ToString(doubleFormat, invariantCulture);
@@ -552,8 +552,8 @@ public class SL3Reader : IDisposable
                         double delta = leftConversionUnit * measurement->Delta, // Negative side
                                depth = 0.3048d * measurement->Depth;
 
-                        stringArray[2] = double.FusedMultiplyAdd(delta, fX* sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
-                        stringArray[3] = double.FusedMultiplyAdd(delta, fY* cos, centralY).ToString(doubleFormat, invariantCulture);
+                        stringArray[2] = double.FusedMultiplyAdd(delta, fX * sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                        stringArray[3] = double.FusedMultiplyAdd(delta, fY * cos, centralY).ToString(doubleFormat, invariantCulture);
                         stringArray[4] = (centralZ - depth).ToString(doubleFormat, invariantCulture);
                         stringArray[5] = depth.ToString(doubleFormat, invariantCulture);
                         stringArray[6] = measurement->AngleInDegrees.ToString(doubleFormat, invariantCulture);
@@ -573,8 +573,8 @@ public class SL3Reader : IDisposable
                         double delta = rightConversionUnit * measurement->Delta, // Positive side
                                depth = 0.3048d * measurement->Depth;
 
-                        stringArray[2] = double.FusedMultiplyAdd(delta, fX* sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
-                        stringArray[3] = double.FusedMultiplyAdd(delta,  fY*cos, centralY).ToString(doubleFormat, invariantCulture);
+                        stringArray[2] = double.FusedMultiplyAdd(delta, fX * sin, centralX).ToString(doubleFormat, invariantCulture); // Azimuthal direction
+                        stringArray[3] = double.FusedMultiplyAdd(delta, fY * cos, centralY).ToString(doubleFormat, invariantCulture);
                         stringArray[4] = (centralZ - depth).ToString(doubleFormat, invariantCulture);
                         stringArray[5] = depth.ToString(doubleFormat, invariantCulture);
                         stringArray[6] = measurement->AngleInDegrees.ToString(doubleFormat, invariantCulture);

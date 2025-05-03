@@ -12,7 +12,7 @@ internal readonly ref struct InterferometricMeasurement
     public readonly bool IsValid
     {
         [SkipLocalsInit, MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => Delta is not < 0.001f and not > 1000.0f && Depth is not < 1f and not > 250.0f;
+        get => !double.IsNaN(Delta) && !double.IsNaN(Depth) && Delta is not < 0.001f and not > 1000.0f && Depth is not < 1f and not > 250.0f;
     }
     public readonly float MetricDistance
     {

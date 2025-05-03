@@ -2,7 +2,7 @@
   "profiles": {
     "SL3Reader": {
       "commandName": "Project",
-      "commandLineArgs": "\"F:\\Bryan.sl3\"  F:\\SS2 -ssg0"
+      "commandLineArgs": "\"F:\\Bryan.sl3\"  F:\\3DGP.txt -3dg+"
     }
   }
 }
