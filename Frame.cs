@@ -16,6 +16,7 @@ public readonly struct Frame
     public const int BasicSize = 128;
     public const int ExtendedSizeV10 = 168;
     public const int ExtendedSizeV13 = 180;
+    public const int ExtendedSizeV14 = 196;
 
     #region Basic Properties // BasicSize = 128
     [field: FieldOffset(0)] public readonly uint PositionOfFirstByte { get; } // (0)
@@ -127,6 +128,7 @@ public readonly struct Frame
                 {
                     FrameVersion.V10 => ExtendedSizeV10,
                     FrameVersion.V13 => ExtendedSizeV13,
+                    FrameVersion.V14 => ExtendedSizeV14,
                     _ => UnsupportedFrame()
 
                 }
